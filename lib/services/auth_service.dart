@@ -6,10 +6,9 @@ import '../models/user.dart';
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   UfficioUser? _ufficioUser;
+
   UfficioUser? get currentUser => _ufficioUser;
-  User? get firebaseUser => _auth.currentUser;
   bool get isLoggedIn => _auth.currentUser != null;
 
   AuthService() {
@@ -29,16 +28,8 @@ class AuthService extends ChangeNotifier {
       if (doc.exists) {
         _ufficioUser = UfficioUser.fromFirestore(doc.data()!, uid);
       } else {
-        _ufficioUser = UfficioUser(
-          uid: uid,
-          email: _auth.currentUser!.email!,
-          displayName: _auth.currentUser!.displayName ?? '',
-          role: 'employee',
-        );
-        await _firestore
-            .collection('users')
-            .doc(uid)
-            .set(_ufficioUser!.toFirestore());
+        _ufficioUser = UfficioUser(uid: uid, email: _auth.currentUser!.email!, displayName: _auth.currentUser!.displayName ?? '', role: 'employee');
+        await _firestore.collection('users').doc(uid).set(_ufficioUser!.toFirestore());
       }
     } catch (e) {
       debugPrint('Error loading user: $e');
@@ -48,51 +39,31 @@ class AuthService extends ChangeNotifier {
 
   Future<String?> signIn(String email, String password) async {
     try {
-      await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-      return null; // null = successo
+      await _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
+      return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
-        case 'user-not-found':
-          return 'Nessun account trovato con questa email.';
-        case 'wrong-password':
-          return 'Password errata.';
-        case 'invalid-email':
-          return 'Email non valida.';
-        case 'user-disabled':
-          return 'Account disabilitato.';
-        default:
-          return 'Errore: ${e.message}';
+        case 'user-not-found': return 'Nessun account trovato.';
+        case 'wrong-password': return 'Password errata.';
+        case 'invalid-email': return 'Email non valida.';
+        default: return 'Errore: ${e.message}';
       }
     }
   }
 
-  Future<String?> register(
-      String email, String password, String displayName) async {
+  Future<String?> register(String email, String password, String displayName) async {
     try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      UserCredential result = await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
       await result.user?.updateDisplayName(displayName);
-      return null; // null = successo
+      return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
-        case 'email-already-in-use':
-          return 'Email già registrata.';
-        case 'weak-password':
-          return 'Password troppo debole (min. 6 caratteri).';
-        case 'invalid-email':
-          return 'Email non valida.';
-        default:
-          return 'Errore: ${e.message}';
+        case 'email-already-in-use': return 'Email già registrata.';
+        case 'weak-password': return 'Password troppo debole (min. 6 caratteri).';
+        default: return 'Errore: ${e.message}';
       }
     }
   }
 
-  Future<void> signOut() async {
-    await _auth.signOut();
-  }
+  Future<void> signOut() async => await _auth.signOut();
 }

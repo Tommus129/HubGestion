@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "46039953742",
+    "project_id": "stepnet-b5d0a",
+    "storage_bucket": "stepnet-b5d0a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:46039953742:android:9d297a4c92fb2bad59ae1f",
+        "android_client_info": {
+          "package_name": "com.example.ufficio_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "46039953742-a8g67obt3gso5t895vioavugp0aouq2l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCp1L3LEmbLN0PHyGdT06XVim1NhkpW7LQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "46039953742-a8g67obt3gso5t895vioavugp0aouq2l.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "46039953742-0stfpj9ml7q86rkoaiajlkgedueraapd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.ufficioApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

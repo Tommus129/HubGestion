@@ -1,26 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import 'register_screen.dart';
 
-class RegisterScreen extends StatefulWidget {
+class LoginScreen extends StatefulWidget {
   @override
-  _RegisterScreenState createState() => _RegisterScreenState();
+  _LoginScreenState createState() => _LoginScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
-  Future<void> _register() async {
+  Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _errorMessage = null; });
     final auth = Provider.of<AuthService>(context, listen: false);
-    final error = await auth.register(_emailController.text, _passwordController.text, _nameController.text);
-    if (error != null) setState(() { _loading = false; _errorMessage = error; });
+    final error = await auth.signIn(_emailController.text, _passwordController.text);
+    setState(() { _loading = false; _errorMessage = error; });
   }
 
   @override
@@ -41,20 +42,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.person_add, size: 64, color: Colors.teal),
+                Icon(Icons.business, size: 64, color: Colors.teal),
                 SizedBox(height: 8),
-                Text('Registrati', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                Text('Ufficio App', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                Text('Accedi al tuo account', style: TextStyle(color: Colors.grey)),
                 SizedBox(height: 32),
-                TextFormField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Nome completo',
-                    prefixIcon: Icon(Icons.person_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  validator: (v) => v!.isEmpty ? 'Inserisci nome' : null,
-                ),
-                SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(
@@ -67,13 +59,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Password (min. 6 caratteri)',
+                    labelText: 'Password',
                     prefixIcon: Icon(Icons.lock_outlined),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  validator: (v) => v!.length < 6 ? 'Min. 6 caratteri' : null,
+                  validator: (v) => v!.isEmpty ? 'Inserisci password' : null,
+                  onFieldSubmitted: (_) => _login(),
                 ),
                 SizedBox(height: 16),
                 if (_errorMessage != null) ...[
@@ -84,27 +81,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.red[200]!),
                     ),
-                    child: Text(_errorMessage!, style: TextStyle(color: Colors.red)),
+                    child: Row(children: [
+                      Icon(Icons.error_outline, color: Colors.red, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(child: Text(_errorMessage!, style: TextStyle(color: Colors.red))),
+                    ]),
                   ),
                   SizedBox(height: 16),
                 ],
                 SizedBox(
                   width: double.infinity, height: 48,
                   child: ElevatedButton(
-                    onPressed: _loading ? null : _register,
+                    onPressed: _loading ? null : _login,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.teal, foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: _loading
-                        ? CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                        : Text('Registrati', style: TextStyle(fontSize: 16)),
+                        ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Text('Accedi', style: TextStyle(fontSize: 16)),
                   ),
                 ),
                 SizedBox(height: 16),
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('Hai già un account? Accedi', style: TextStyle(color: Colors.teal)),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RegisterScreen())),
+                  child: Text('Non hai un account? Registrati', style: TextStyle(color: Colors.teal)),
                 ),
               ],
             ),

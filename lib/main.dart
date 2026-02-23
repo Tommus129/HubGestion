@@ -22,30 +22,18 @@ class MyApp extends StatelessWidget {
       create: (_) => AuthService(),
       child: MaterialApp(
         title: 'Ufficio App',
-        theme: ThemeData(
-          primarySwatch: Colors.teal,
-          useMaterial3: true,
-        ),
-        home: AuthWrapper(),
+        theme: ThemeData(primarySwatch: Colors.teal, useMaterial3: true),
         debugShowCheckedModeBanner: false,
+        home: StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Scaffold(body: Center(child: CircularProgressIndicator()));
+            }
+            return snapshot.hasData ? DashboardScreen() : LoginScreen();
+          },
+        ),
       ),
-    );
-  }
-}
-
-class AuthWrapper extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context);
-    
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        return snapshot.hasData ? DashboardScreen() : LoginScreen();
-      },
     );
   }
 }
