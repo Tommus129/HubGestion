@@ -24,10 +24,31 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   bool _canSeeAll = false;
   String? _myUid;
 
+  Map<String, String> _userNames   = {};
+  Map<String, String> _clientNames = {};
+
   @override
   void initState() {
     super.initState();
+    _loadNames();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadAppointments());
+  }
+
+  Future<void> _loadNames() async {
+    final users   = await _db.collection('users').get();
+    final clients = await _db.collection('clients').get();
+    setState(() {
+      _userNames = {
+        for (final d in users.docs)
+          d.id: (d.data()['displayName']?.toString().isNotEmpty == true
+              ? d.data()['displayName']
+              : d.data()['email']) ?? d.id
+      };
+      _clientNames = {
+        for (final d in clients.docs)
+          d.id: '${d.data()['nome'] ?? ''} ${d.data()['cognome'] ?? ''}'.trim()
+      };
+    });
   }
 
   void _loadAppointments() {
@@ -35,15 +56,15 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     switch (_periodo) {
       case 'mese':
         start = DateTime(_now.year, _now.month, 1);
-        end = DateTime(_now.year, _now.month + 1, 0);
+        end   = DateTime(_now.year, _now.month + 1, 0);
         break;
       case 'anno':
         start = DateTime(_now.year, 1, 1);
-        end = DateTime(_now.year, 12, 31);
+        end   = DateTime(_now.year, 12, 31);
         break;
       default:
         start = DateTime(2020);
-        end = DateTime(2030);
+        end   = DateTime(2030);
     }
     _aptService.getAppointments(start, end).listen((apts) {
       setState(() {
@@ -52,23 +73,19 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     });
   }
 
-  List<Appointment> get _filtered {
-    return _all.where((a) {
-      if (_filtroFatturato == 'si' && !a.fatturato) return false;
-      if (_filtroFatturato == 'no' && a.fatturato) return false;
-      if (_filtroPagato == 'si' && !a.pagato) return false;
-      if (_filtroPagato == 'no' && a.pagato) return false;
-      return true;
-    }).toList();
-  }
+  List<Appointment> get _filtered => _all.where((a) {
+    if (_filtroFatturato == 'si' && !a.fatturato) return false;
+    if (_filtroFatturato == 'no' && a.fatturato)  return false;
+    if (_filtroPagato    == 'si' && !a.pagato)    return false;
+    if (_filtroPagato    == 'no' && a.pagato)     return false;
+    return true;
+  }).toList();
 
-  Future<void> _toggleFatturato(Appointment apt) async {
-    await _db.collection('appointments').doc(apt.id).update({'fatturato': !apt.fatturato});
-  }
+  Future<void> _toggleFatturato(Appointment apt) async =>
+      _db.collection('appointments').doc(apt.id).update({'fatturato': !apt.fatturato});
 
-  Future<void> _togglePagato(Appointment apt) async {
-    await _db.collection('appointments').doc(apt.id).update({'pagato': !apt.pagato});
-  }
+  Future<void> _togglePagato(Appointment apt) async =>
+      _db.collection('appointments').doc(apt.id).update({'pagato': !apt.pagato});
 
   double get _potenziale   => _all.fold(0.0, (s, a) => s + a.totale);
   double get _incassato    => _all.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
@@ -78,13 +95,13 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final auth = Provider.of<AuthService>(context);
-    final me = auth.currentUser;
+    final auth    = Provider.of<AuthService>(context);
+    final me      = auth.currentUser;
     final canSeeAll = me?.isAdmin ?? false;
-    final myUid = me?.uid;
+    final myUid     = me?.uid;
     if (canSeeAll != _canSeeAll || myUid != _myUid) {
       _canSeeAll = canSeeAll;
-      _myUid = myUid;
+      _myUid     = myUid;
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAppointments());
     }
 
@@ -94,7 +111,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       body: Column(
         children: [
 
-          // ── FILTRI ─────────────────────────────────────────────
+          // ── FILTRI ──────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             color: Colors.grey[50],
@@ -119,10 +136,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                     ]),
                   ),
 
-                // Periodo chips
                 Row(children: ['mese', 'anno', 'sempre'].map((p) {
                   final active = _periodo == p;
-                  final label = p == 'mese' ? 'Mese' : p == 'anno' ? 'Anno' : 'Sempre';
+                  final label  = p == 'mese' ? 'Mese' : p == 'anno' ? 'Anno' : 'Sempre';
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -148,20 +164,19 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 }).toList()),
                 const SizedBox(height: 10),
 
-                // Filtri stato
                 Wrap(
                   spacing: 6, runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text('Fatturato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                     _segBtn('tutti', 'Tutti', _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
-                    _segBtn('si', 'Sì', _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
-                    _segBtn('no', 'No', _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
+                    _segBtn('si',    'Sì',    _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
+                    _segBtn('no',    'No',    _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
                     const SizedBox(width: 8),
                     Text('Pagato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                     _segBtn('tutti', 'Tutti', _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
-                    _segBtn('si', 'Sì', _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
-                    _segBtn('no', 'No', _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
+                    _segBtn('si',    'Sì',    _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
+                    _segBtn('no',    'No',    _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
                   ],
                 ),
               ],
@@ -170,29 +185,25 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
 
           Divider(height: 1, color: Colors.grey.shade200),
 
-          // ── METRIC BOX ─────────────────────────────────────────
+          // ── METRIC BOX ──────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(children: [
               _metricBox(canSeeAll ? 'Potenziale' : 'I miei incassi',
-                  DateHelpers.formatCurrency(_potenziale), primary, Icons.trending_up,
-                  _potenziale, _potenziale),
+                  DateHelpers.formatCurrency(_potenziale), primary, Icons.trending_up, _potenziale, _potenziale),
               const SizedBox(width: 8),
               _metricBox('Incassato',
-                  DateHelpers.formatCurrency(_incassato), Colors.green, Icons.check_circle_outline,
-                  _incassato, _potenziale),
+                  DateHelpers.formatCurrency(_incassato), Colors.green, Icons.check_circle_outline, _incassato, _potenziale),
               const SizedBox(width: 8),
               _metricBox('Fatt. non pag.',
-                  DateHelpers.formatCurrency(_fatturatoNP), Colors.orange, Icons.receipt_outlined,
-                  _fatturatoNP, _potenziale),
+                  DateHelpers.formatCurrency(_fatturatoNP), Colors.orange, Icons.receipt_outlined, _fatturatoNP, _potenziale),
               const SizedBox(width: 8),
               _metricBox('Non fatturato',
-                  DateHelpers.formatCurrency(_nonFatturato), Colors.red, Icons.warning_amber_outlined,
-                  _nonFatturato, _potenziale),
+                  DateHelpers.formatCurrency(_nonFatturato), Colors.red, Icons.warning_amber_outlined, _nonFatturato, _potenziale),
             ]),
           ),
 
-          // ── HEADER LISTA ──────────────────────────────────────
+          // ── HEADER ──────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
             child: Row(
@@ -217,7 +228,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ),
           ),
 
-          // ── LISTA ──────────────────────────────────────────────
+          // ── LISTA ───────────────────────────────────────────────
           Expanded(
             child: _filtered.isEmpty
                 ? Center(child: Column(
@@ -232,10 +243,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     itemCount: _filtered.length,
-                    itemBuilder: (context, i) {
-                      final apt = _filtered[i];
-                      return _aptCard(apt, primary, canSeeAll);
-                    },
+                    itemBuilder: (_, i) => _aptCard(_filtered[i], primary, canSeeAll),
                   ),
           ),
         ],
@@ -243,8 +251,11 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     );
   }
 
-  // ── CARD APPUNTAMENTO ──────────────────────────────────────────────────────
+  // ── CARD ────────────────────────────────────────────────────────────────────
   Widget _aptCard(Appointment apt, Color primary, bool isAdmin) {
+    final personaNome = _userNames[apt.userId]   ?? apt.userId;
+    final clienteNome = _clientNames[apt.clientId] ?? (apt.clientId.isNotEmpty ? apt.clientId : '—');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -258,7 +269,8 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Riga 1: titolo + totale
+
+            // ── Riga 1: titolo + importo ──
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -270,11 +282,14 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 2),
-                      Text(DateHelpers.formatDate(apt.data),
-                          style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+                      Text(
+                        '${DateHelpers.formatDate(apt.data)}  •  ${apt.oraInizio}–${apt.oraFine}',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -286,88 +301,142 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            // Riga 2: toggle Fatt. + Pag.
+
+            const SizedBox(height: 8),
+            Divider(height: 1, color: Colors.grey.shade100),
+            const SizedBox(height: 8),
+
+            // ── Riga 2: persona + cliente ──
             Row(
               children: [
-                // Toggle FATTURATO
-                Tooltip(
-                  message: isAdmin
-                      ? (apt.fatturato ? 'Annulla fatturazione' : 'Segna come fatturato')
-                      : 'Solo admin',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: isAdmin ? () => _toggleFatturato(apt) : null,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: apt.fatturato ? Colors.orange.withOpacity(0.12) : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: apt.fatturato ? Colors.orange : Colors.grey.shade300,
-                          width: apt.fatturato ? 1.5 : 1.0,
-                        ),
+                // Persona
+                Expanded(
+                  child: Row(children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: primary.withOpacity(0.12),
+                      child: Text(
+                        personaNome.isNotEmpty ? personaNome[0].toUpperCase() : 'U',
+                        style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.bold),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          apt.fatturato ? Icons.check : Icons.circle_outlined,
-                          size: 13,
-                          color: apt.fatturato ? Colors.orange[700] : Colors.grey[400],
-                        ),
-                        const SizedBox(width: 5),
-                        Text('Fatturato',
-                            style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600,
-                              color: apt.fatturato ? Colors.orange[700] : Colors.grey[400],
-                            )),
-                      ]),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Flexible(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Persona', style: TextStyle(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+                        Text(personaNome,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                    )),
+                  ]),
                 ),
-                const SizedBox(width: 8),
-                // Toggle PAGATO
-                Tooltip(
-                  message: apt.pagato ? 'Annulla pagamento' : 'Segna come pagato',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: () => _togglePagato(apt),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: apt.pagato ? Colors.green.withOpacity(0.12) : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: apt.pagato ? Colors.green : Colors.grey.shade300,
-                          width: apt.pagato ? 1.5 : 1.0,
-                        ),
+                const SizedBox(width: 12),
+                // Cliente
+                Expanded(
+                  child: Row(children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: Colors.teal.withOpacity(0.12),
+                      child: Text(
+                        clienteNome.isNotEmpty && clienteNome != '—' ? clienteNome[0].toUpperCase() : 'C',
+                        style: const TextStyle(fontSize: 10, color: Colors.teal, fontWeight: FontWeight.bold),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          apt.pagato ? Icons.check : Icons.circle_outlined,
-                          size: 13,
-                          color: apt.pagato ? Colors.green[700] : Colors.grey[400],
-                        ),
-                        const SizedBox(width: 5),
-                        Text('Pagato',
-                            style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600,
-                              color: apt.pagato ? Colors.green[700] : Colors.grey[400],
-                            )),
-                      ]),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Flexible(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Cliente', style: TextStyle(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w500)),
+                        Text(clienteNome,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                    )),
+                  ]),
                 ),
               ],
             ),
+
+            const SizedBox(height: 10),
+
+            // ── Riga 3: toggle Fatt. + Pag. ──
+            Row(children: [
+              _toggleBadge(
+                label: 'Fatturato',
+                active: apt.fatturato,
+                activeColor: Colors.orange,
+                enabled: isAdmin,
+                tooltip: isAdmin
+                    ? (apt.fatturato ? 'Annulla fatturazione' : 'Segna come fatturato')
+                    : 'Solo admin',
+                onTap: () => _toggleFatturato(apt),
+              ),
+              const SizedBox(width: 8),
+              _toggleBadge(
+                label: 'Pagato',
+                active: apt.pagato,
+                activeColor: Colors.green,
+                enabled: true,
+                tooltip: apt.pagato ? 'Annulla pagamento' : 'Segna come pagato',
+                onTap: () => _togglePagato(apt),
+              ),
+            ]),
           ],
         ),
       ),
     );
   }
 
-  // ── METRIC BOX con progress bar ────────────────────────────────────────────
+  // ── TOGGLE BADGE ────────────────────────────────────────────────────────────
+  Widget _toggleBadge({
+    required String label,
+    required bool active,
+    required Color activeColor,
+    required bool enabled,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: active ? activeColor.withOpacity(0.12) : Colors.grey[100],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: active ? activeColor : Colors.grey.shade300,
+              width: active ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(
+              active ? Icons.check : Icons.circle_outlined,
+              size: 13,
+              color: active ? activeColor.shade700 : Colors.grey[400],
+            ),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: active ? activeColor.shade700 : Colors.grey[400],
+            )),
+            if (!enabled) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.lock_outline, size: 11, color: Colors.grey[300]),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ── METRIC BOX ──────────────────────────────────────────────────────────────
   Widget _metricBox(String label, String value, Color color, IconData icon, double amount, double total) {
     final pct = (total > 0) ? (amount / total).clamp(0.0, 1.0) : 0.0;
     return Expanded(
