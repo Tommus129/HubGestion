@@ -34,7 +34,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Map<String, Color> _userColors = {};
   Map<String, String> _userNames = {};
-  Map<String, String> _clientNames = {}; // ✅ NUOVO: clientId → fullName
+  Map<String, String> _clientNames = {};
   Map<String, Room> _rooms = {};
 
   List<DateTime> get _days {
@@ -47,7 +47,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   void initState() {
     super.initState();
     _loadUsers();
-    _loadClients(); // ✅ NUOVO
+    _loadClients();
     _roomService.getRooms().listen((rooms) =>
         setState(() => _rooms = {for (var r in rooms) r.id!: r}));
   }
@@ -66,7 +66,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     setState(() { _userColors = c; _userNames = n; });
   }
 
-  // ✅ NUOVO: carica nome+cognome di tutti i clienti
   Future<void> _loadClients() async {
     final snap = await _db.collection('clients').get();
     final m = <String, String>{};
@@ -81,7 +80,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Color _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
   String _uName(String uid) => _userNames[uid] ?? '';
-  String _cName(String cid) => _clientNames[cid] ?? ''; // ✅ NUOVO
+  String _cName(String cid) => _clientNames[cid] ?? '';
 
   Color _rColor(String? id) {
     if (id == null || !_rooms.containsKey(id)) return Colors.grey;
@@ -308,18 +307,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               final room   = _rooms[apt.roomId];
                               final isMine = apt.userId == me?.uid;
                               final canSee = isMine || (me?.isAdmin ?? false);
-
-                              // ✅ Nome cliente (solo se canSee)
                               final clienteNome = canSee ? _cName(apt.clientId) : '';
 
                               final padding = 2.0;
                               final colW = (dw - padding * (col.total + 1)) / col.total;
                               final leftPos = padding + col.index * (colW + padding);
 
-                              // ✅ Soglie altezza adattive per colonne affiancate
-                              final sogliaStanza  = col.total > 1 ? 36.0 : 44.0;
-                              final sogliaCliente = col.total > 1 ? 52.0 : 60.0;
-                              final sogliaTariffa = col.total > 1 ? 70.0 : 76.0;
+                              final sogliaStanza   = col.total > 1 ? 36.0 : 44.0;
+                              final sogliaCliente  = col.total > 1 ? 52.0 : 60.0;
+                              final sogliaTariffa  = col.total > 1 ? 70.0 : 76.0;
+                              final sogliaBadge    = col.total > 1 ? 88.0 : 92.0; // ✅ soglia badge
 
                               return Positioned(
                                 top: top,
@@ -410,7 +407,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                       ),
                                                     ]),
 
-                                                  // ── CLIENTE ✅ solo proprietario/admin
+                                                  // ── CLIENTE (solo proprietario/admin)
                                                   if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
                                                     Row(children: [
                                                       Icon(
@@ -433,7 +430,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                       ),
                                                     ]),
 
-                                                  // ── TARIFFA ✅ solo proprietario/admin
+                                                  // ── TARIFFA (solo proprietario/admin)
                                                   if (canSee && h > sogliaTariffa)
                                                     Text(
                                                       '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
@@ -443,6 +440,71 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                         fontWeight: FontWeight.w500,
                                                       ),
                                                       overflow: TextOverflow.ellipsis,
+                                                    ),
+
+                                                  // ── BADGE FATTURATO / PAGATO ✅ NUOVO
+                                                  if (canSee && h > sogliaBadge)
+                                                    Padding(
+                                                      padding: EdgeInsets.only(top: 3),
+                                                      child: Row(
+                                                        children: [
+                                                          // FATTURATO
+                                                          Container(
+                                                            padding: EdgeInsets.symmetric(
+                                                                horizontal: 4, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: apt.fatturato
+                                                                  ? Colors.orange.withOpacity(0.2)
+                                                                  : Colors.grey.withOpacity(0.15),
+                                                              borderRadius: BorderRadius.circular(3),
+                                                              border: Border.all(
+                                                                color: apt.fatturato
+                                                                    ? Colors.orange
+                                                                    : Colors.grey.shade400,
+                                                                width: 0.8,
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              apt.fatturato ? 'Fatt. ✓' : 'Fatt. ✗',
+                                                              style: TextStyle(
+                                                                fontSize: col.total > 1 ? 8 : 9,
+                                                                color: apt.fatturato
+                                                                    ? Colors.orange.shade800
+                                                                    : Colors.grey.shade500,
+                                                                fontWeight: FontWeight.w700,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          SizedBox(width: 3),
+                                                          // PAGATO
+                                                          Container(
+                                                            padding: EdgeInsets.symmetric(
+                                                                horizontal: 4, vertical: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: apt.pagato
+                                                                  ? Colors.green.withOpacity(0.2)
+                                                                  : Colors.grey.withOpacity(0.15),
+                                                              borderRadius: BorderRadius.circular(3),
+                                                              border: Border.all(
+                                                                color: apt.pagato
+                                                                    ? Colors.green
+                                                                    : Colors.grey.shade400,
+                                                                width: 0.8,
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              apt.pagato ? 'Pag. ✓' : 'Pag. ✗',
+                                                              style: TextStyle(
+                                                                fontSize: col.total > 1 ? 8 : 9,
+                                                                color: apt.pagato
+                                                                    ? Colors.green.shade700
+                                                                    : Colors.grey.shade500,
+                                                                fontWeight: FontWeight.w700,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
 
                                                 ],
