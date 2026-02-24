@@ -10,7 +10,7 @@ class AuthService extends ChangeNotifier {
 
   UfficioUser? get currentUser => _ufficioUser;
   User? get firebaseUser => _auth.currentUser;
-  bool get isLoggedIn => _auth.currentUser != null;
+  bool get isLoggedIn => _ufficioUser != null;
 
   AuthService() {
     _auth.authStateChanges().listen((User? user) async {
@@ -63,16 +63,22 @@ class AuthService extends ChangeNotifier {
       return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
-        case 'user-not-found': return 'Nessun account trovato.';
-        case 'wrong-password': return 'Password errata.';
-        case 'invalid-email': return 'Email non valida.';
-        case 'invalid-credential': return 'Credenziali non valide.';
-        default: return 'Errore: ${e.message}';
+        case 'user-not-found':
+          return 'Nessun account trovato.';
+        case 'wrong-password':
+          return 'Password errata.';
+        case 'invalid-email':
+          return 'Email non valida.';
+        case 'invalid-credential':
+          return 'Credenziali non valide.';
+        default:
+          return 'Errore: ${e.message}';
       }
     }
   }
 
-  Future<String?> register(String email, String password, String displayName) async {
+  Future<String?> register(
+      String email, String password, String displayName) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
           email: email.trim(), password: password);
@@ -80,12 +86,22 @@ class AuthService extends ChangeNotifier {
       return null;
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
-        case 'email-already-in-use': return 'Email già registrata.';
-        case 'weak-password': return 'Password troppo debole.';
-        default: return 'Errore: ${e.message}';
+        case 'email-already-in-use':
+          return 'Email già registrata.';
+        case 'weak-password':
+          return 'Password troppo debole.';
+        default:
+          return 'Errore: ${e.message}';
       }
     }
   }
 
-  Future<void> signOut() async => await _auth.signOut();
+  // ── LOGOUT AFFIDABILE ────────────────────────────────────────────────────
+  Future<void> signOut() async {
+    // Reset immediato — garantisce il redirect alla LoginScreen
+    // anche se lo stream authStateChanges è lento su web
+    _ufficioUser = null;
+    notifyListeners();
+    await _auth.signOut();
+  }
 }
