@@ -1,17 +1,21 @@
+import 'package:intl/intl.dart';
+
 class DateHelpers {
-  static String formatDate(DateTime d) =>
-      '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
-
-  static String formatTime(String time) => time;
-
-  static double calculateHours(String start, String end) {
-    final s = start.split(':');
-    final e = end.split(':');
-    final startMin = int.parse(s[0]) * 60 + int.parse(s[1]);
-    final endMin = int.parse(e[0]) * 60 + int.parse(e[1]);
-    return (endMin - startMin) / 60.0;
+  static String formatDate(DateTime date) {
+    return DateFormat('dd/MM/yyyy').format(date);
   }
 
-  static String formatCurrency(double amount) =>
-      '€ ${amount.toStringAsFixed(2)}';
+  // ✅ Versione corta per tabelle (es. 24/02/26)
+  static String formatDateShort(DateTime date) {
+    return DateFormat('dd/MM/yy').format(date);
+  }
+
+  static String formatCurrency(double amount) {
+    return NumberFormat.currency(locale: 'it_IT', symbol: '€', decimalDigits: 2)
+        .format(amount);
+  }
+
+  static String formatMonth(DateTime date) {
+    return DateFormat('MMMM yyyy', 'it_IT').format(date);
+  }
 }

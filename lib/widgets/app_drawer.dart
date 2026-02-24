@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/clients/clients_list_screen.dart';
+import '../screens/clients/archived_clients_screen.dart';
 import '../screens/reports/client_report_screen.dart';
 import '../screens/reports/payments_report_screen.dart';
 import '../screens/admin/rooms_screen.dart';
@@ -27,7 +28,7 @@ class AppDrawer extends StatelessWidget {
     return Drawer(
       child: Column(
         children: [
-          // HEADER con colore tema dinamico
+          // HEADER — tap apre profilo
           InkWell(
             onTap: () {
               Navigator.pop(context);
@@ -41,10 +42,7 @@ class AppDrawer extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    primary,
-                    primary.withOpacity(0.75),
-                  ],
+                  colors: [primary, primary.withOpacity(0.75)],
                 ),
               ),
               child: Column(
@@ -55,26 +53,23 @@ class AppDrawer extends StatelessWidget {
                     backgroundColor: Colors.white.withOpacity(0.2),
                     child: Text(avatarLetter,
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                        )),
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold)),
                   ),
                   SizedBox(height: 12),
                   Row(children: [
                     Text(displayName,
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        )),
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold)),
                     SizedBox(width: 6),
                     Icon(Icons.edit, size: 14, color: Colors.white60),
                   ]),
                   SizedBox(height: 2),
                   Text(user?.email ?? '',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 12)),
+                      style: TextStyle(color: Colors.white70, fontSize: 12)),
                   SizedBox(height: 6),
                   Container(
                     padding:
@@ -102,14 +97,22 @@ class AppDrawer extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.symmetric(vertical: 8),
               children: [
+
                 _item(context, Icons.calendar_month, 'Calendario', primary,
                     () => Navigator.pushReplacement(context,
                         MaterialPageRoute(builder: (_) => CalendarScreen()))),
 
+                _sectionLabel('CLIENTI', primary),
+
                 _item(context, Icons.people, 'Clienti', primary,
                     () => Navigator.pushReplacement(context,
+                        MaterialPageRoute(builder: (_) => ClientsListScreen()))),
+
+                // ✅ NUOVA VOCE — Archivio Clienti
+                _item(context, Icons.archive, 'Archivio Clienti', primary,
+                    () => Navigator.pushReplacement(context,
                         MaterialPageRoute(
-                            builder: (_) => ClientsListScreen()))),
+                            builder: (_) => ArchivedClientsScreen()))),
 
                 _sectionLabel('REPORT', primary),
 
@@ -149,7 +152,6 @@ class AppDrawer extends StatelessWidget {
                 style: TextStyle(
                     color: Colors.red, fontWeight: FontWeight.w500)),
             onTap: () async {
-              // Chiudiamo il drawer PRIMA del logout
               Navigator.of(context).pop();
               await auth.signOut();
             },
@@ -164,8 +166,7 @@ class AppDrawer extends StatelessWidget {
       VoidCallback onTap) {
     return ListTile(
       leading: Container(
-        width: 36,
-        height: 36,
+        width: 36, height: 36,
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
@@ -177,8 +178,7 @@ class AppDrawer extends StatelessWidget {
         Navigator.pop(ctx);
         onTap();
       },
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       horizontalTitleGap: 8,
     );
   }
