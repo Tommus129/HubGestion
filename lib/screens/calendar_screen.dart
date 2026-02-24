@@ -261,33 +261,51 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   // ── PICKER DIALOGS ───────────────────────────────────────────────────────
 
-  void _showUserPicker(BuildContext context, Color primary) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _PickerSheet(
-        title: 'Filtra per Persona',
-        children: _users.map((u) {
-          final hex = (u['personaColor'] as String).replaceAll('#', '');
-          Color c;
-          try { c = Color(int.parse('FF$hex', radix: 16)); }
-          catch (_) { c = Colors.blueGrey; }
-          return _PickerItem(
-            leading: CircleAvatar(radius: 14, backgroundColor: c,
-              child: Text((u['displayName'] as String)[0].toUpperCase(),
-                  style: TextStyle(color: Colors.white, fontSize: 12))),
-            label: u['displayName'] as String,
-            selected: _filterUserId == u['uid'],
-            onTap: () {
-              setState(() => _filterUserId =
-                  _filterUserId == u['uid'] ? null : u['uid'] as String);
-              Navigator.pop(context);
-            },
-          );
-        }).toList(),
-      ),
+void _showUserPicker(BuildContext context, Color primary) {
+  // ✅ Guard: se la lista è ancora vuota non aprire il picker
+  if (_users.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Caricamento utenti in corso...')),
     );
+    return;
   }
+
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _PickerSheet(
+      title: 'Filtra per Persona',
+      children: _users.map((u) {
+        final hex = (u['personaColor'] as String).replaceAll('#', '');
+        Color c;
+        try {
+          c = Color(int.parse('FF$hex', radix: 16));
+        } catch (_) {
+          c = Colors.blueGrey;
+        }
+        final displayName = u['displayName'] as String? ?? 'Utente';
+        return _PickerItem(
+          leading: CircleAvatar(
+            radius: 14,
+            backgroundColor: c,
+            child: Text(
+              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ),
+          label: displayName,
+          selected: _filterUserId == u['uid'],
+          onTap: () {
+            setState(() => _filterUserId =
+                _filterUserId == u['uid'] ? null : u['uid'] as String);
+            Navigator.pop(context);
+          },
+        );
+      }).toList(),
+    ),
+  );
+}
+
 
   void _showRoomPicker(BuildContext context, Color primary) {
     showModalBottomSheet(
