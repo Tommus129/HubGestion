@@ -4,34 +4,36 @@
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted", "order": "ASCENDING" },
-        { "fieldPath": "data", "order": "ASCENDING" }
+        { "fieldPath": "deleted",  "order": "ASCENDING" },
+        { "fieldPath": "data",     "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted", "order": "ASCENDING" },
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "data", "order": "ASCENDING" }
+        { "fieldPath": "clientId", "order": "ASCENDING" },
+        { "fieldPath": "deleted",  "order": "ASCENDING" },
+        { "fieldPath": "data",     "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted", "order": "ASCENDING" },
-        { "fieldPath": "clientId", "order": "ASCENDING" }
+        { "fieldPath": "deleted",  "order": "ASCENDING" },
+        { "fieldPath": "userId",   "order": "ASCENDING" },
+        { "fieldPath": "data",     "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted", "order": "ASCENDING" },
-        { "fieldPath": "roomId", "order": "ASCENDING" },
-        { "fieldPath": "data", "order": "ASCENDING" }
+        { "fieldPath": "deleted",  "order": "ASCENDING" },
+        { "fieldPath": "roomId",   "order": "ASCENDING" },
+        { "fieldPath": "data",     "order": "ASCENDING" },
+        { "fieldPath": "oraInizio","order": "ASCENDING" }
       ]
     },
     {
@@ -39,7 +41,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "archived", "order": "ASCENDING" },
-        { "fieldPath": "cognome", "order": "ASCENDING" }
+        { "fieldPath": "cognome",  "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp","order": "DESCENDING" }
       ]
     }
   ],
