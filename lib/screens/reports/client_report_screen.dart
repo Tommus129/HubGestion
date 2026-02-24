@@ -150,69 +150,85 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 const SizedBox(height: 10),
 
                 // Riga 2: periodo chips + selettori (wrappati)
-                Wrap(
-                  spacing: 6, runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _periodoChip('mese',   'Mese',   primary),
-                    _periodoChip('anno',   'Anno',   primary),
-                    _periodoChip('sempre', 'Sempre', primary),
-                    _periodoChip('custom', 'Custom', primary),
+// Riga 2a: chips periodo
+Row(
+  children: [
+    _periodoChip('mese',   'Mese',   primary),
+    const SizedBox(width: 6),
+    _periodoChip('anno',   'Anno',   primary),
+    const SizedBox(width: 6),
+    _periodoChip('sempre', 'Sempre', primary),
+    const SizedBox(width: 6),
+    _periodoChip('custom', 'Custom', primary),
+  ],
+),
+const SizedBox(height: 8),
 
-                    if (_periodoType == 'mese') ...[
-                      SizedBox(
-                        width: 130,
-                        child: DropdownButtonFormField<int>(
-                          value: _selectedMonth,
-                          isDense: true,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          ),
-                          items: List.generate(12, (i) => DropdownMenuItem(
-                              value: i + 1, child: Text(_monthName(i + 1), overflow: TextOverflow.ellipsis))),
-                          onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
-                        ),
-                      ),
-                      SizedBox(
-                        width: 80,
-                        child: DropdownButtonFormField<int>(
-                          value: _selectedYear,
-                          isDense: true,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          ),
-                          items: List.generate(8, (i) => DropdownMenuItem(
-                              value: 2024 + i, child: Text('${2024 + i}'))),
-                          onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
-                        ),
-                      ),
-                    ],
+// Riga 2b: selettori data — SEPARATI dai chip, nessun overflow
+if (_periodoType == 'mese')
+  Row(children: [
+    Expanded(
+      flex: 3,
+      child: DropdownButtonFormField<int>(
+        value: _selectedMonth,
+        isDense: true,
+        decoration: InputDecoration(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        ),
+        items: List.generate(12, (i) => DropdownMenuItem(
+            value: i + 1, child: Text(_monthName(i + 1), overflow: TextOverflow.ellipsis))),
+        onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
+      ),
+    ),
+    const SizedBox(width: 8),
+    Expanded(
+      flex: 2,
+      child: DropdownButtonFormField<int>(
+        value: _selectedYear,
+        isDense: true,
+        decoration: InputDecoration(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        ),
+        items: List.generate(8, (i) => DropdownMenuItem(
+            value: 2024 + i, child: Text('${2024 + i}'))),
+        onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
+      ),
+    ),
+  ]),
 
-                    if (_periodoType == 'anno')
-                      SizedBox(
-                        width: 90,
-                        child: DropdownButtonFormField<int>(
-                          value: _selectedYear,
-                          isDense: true,
-                          decoration: InputDecoration(
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          ),
-                          items: List.generate(8, (i) => DropdownMenuItem(
-                              value: 2024 + i, child: Text('${2024 + i}'))),
-                          onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
-                        ),
-                      ),
+if (_periodoType == 'anno')
+  Row(children: [
+    SizedBox(
+      width: 120,
+      child: DropdownButtonFormField<int>(
+        value: _selectedYear,
+        isDense: true,
+        decoration: InputDecoration(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        ),
+        items: List.generate(8, (i) => DropdownMenuItem(
+            value: 2024 + i, child: Text('${2024 + i}'))),
+        onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
+      ),
+    ),
+  ]),
 
-                    if (_periodoType == 'custom') ...[
-                      _datePicker('Dal', _customFrom, (d) { setState(() => _customFrom = d); _applyLocalFilters(); }, primary),
-                      _datePicker('Al',  _customTo,   (d) { setState(() => _customTo   = d); _applyLocalFilters(); }, primary),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 8),
+if (_periodoType == 'custom')
+  Row(children: [
+    Expanded(child: _datePicker('Dal', _customFrom, (d) {
+      setState(() => _customFrom = d); _applyLocalFilters();
+    }, primary)),
+    const SizedBox(width: 8),
+    Expanded(child: _datePicker('Al', _customTo, (d) {
+      setState(() => _customTo = d); _applyLocalFilters();
+    }, primary)),
+  ]),
+
+const SizedBox(height: 8),
+
 
                 // Riga 3: filtri stato
                 Wrap(
