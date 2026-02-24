@@ -23,9 +23,8 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   String _periodo = 'mese';
   final DateTime _now = DateTime.now();
 
-  // ✅ Filtri pagato / fatturato: null=tutti, true=sì, false=no
-  bool? _filtroPagato;
-  bool? _filtroFatturato;
+  // Tiene traccia degli id in aggiornamento per mostrare loading
+  final Set<String> _updating = {};
 
   @override
   void initState() {
@@ -61,22 +60,31 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     });
   }
 
-  // Filtro ruolo (employee vede solo i suoi)
-  List<Appointment> _byRole(String? myUid, bool isAdmin) {
+  List<Appointment> _visibleApts(String? myUid, bool isAdmin) {
     if (isAdmin || myUid == null) return _appointments;
     return _appointments.where((a) => a.userId == myUid).toList();
   }
 
-  // ✅ Applica anche i filtri pagato/fatturato
-  List<Appointment> _filtered(String? myUid, bool isAdmin) {
-    var list = _byRole(myUid, isAdmin);
-    if (_filtroPagato != null) {
-      list = list.where((a) => a.pagato == _filtroPagato).toList();
+  // ✅ Toggle pagato su Firestore
+  Future<void> _togglePagato(Appointment apt) async {
+    if (apt.id == null) return;
+    setState(() => _updating.add(apt.id!));
+    try {
+      await _aptService.updateAppointment(apt.id!, {'pagato': !apt.pagato});
+    } finally {
+      if (mounted) setState(() => _updating.remove(apt.id!));
     }
-    if (_filtroFatturato != null) {
-      list = list.where((a) => a.fatturato == _filtroFatturato).toList();
+  }
+
+  // ✅ Toggle fatturato su Firestore
+  Future<void> _toggleFatturato(Appointment apt) async {
+    if (apt.id == null) return;
+    setState(() => _updating.add(apt.id!));
+    try {
+      await _aptService.updateAppointment(apt.id!, {'fatturato': !apt.fatturato});
+    } finally {
+      if (mounted) setState(() => _updating.remove(apt.id!));
     }
-    return list;
   }
 
   @override
@@ -86,11 +94,11 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final isAdmin = me?.isAdmin ?? false;
     final myUid = me?.uid;
 
-    final visApts = _filtered(myUid, isAdmin);
+    final visApts = _visibleApts(myUid, isAdmin);
 
-    final totaleOre      = visApts.fold(0.0, (s, a) => s + a.oreTotali);
-    final totaleImporto  = visApts.fold(0.0, (s, a) => s + a.totale);
-    final totalePagato   = visApts.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
+    final totaleOre       = visApts.fold(0.0, (s, a) => s + a.oreTotali);
+    final totaleImporto   = visApts.fold(0.0, (s, a) => s + a.totale);
+    final totalePagato    = visApts.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
     final totaleNonPagato = totaleImporto - totalePagato;
 
     return Scaffold(
@@ -156,78 +164,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                     ),
                   )).toList(),
                 ),
-                SizedBox(height: 12),
-
-                // ✅ FILTRO PAGATO
-                Text('Pagamento',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.4)),
-                SizedBox(height: 6),
-                Row(
-                  children: [
-                    _filtroChip(
-                      label: 'Tutti',
-                      selected: _filtroPagato == null,
-                      color: Colors.grey,
-                      onTap: () => setState(() => _filtroPagato = null),
-                    ),
-                    SizedBox(width: 8),
-                    _filtroChip(
-                      label: '✓ Pagato',
-                      selected: _filtroPagato == true,
-                      color: Colors.green,
-                      onTap: () => setState(() =>
-                          _filtroPagato = _filtroPagato == true ? null : true),
-                    ),
-                    SizedBox(width: 8),
-                    _filtroChip(
-                      label: '✗ Non pagato',
-                      selected: _filtroPagato == false,
-                      color: Colors.red,
-                      onTap: () => setState(() =>
-                          _filtroPagato = _filtroPagato == false ? null : false),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 12),
-
-                // ✅ FILTRO FATTURATO
-                Text('Fatturazione',
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.4)),
-                SizedBox(height: 6),
-                Row(
-                  children: [
-                    _filtroChip(
-                      label: 'Tutti',
-                      selected: _filtroFatturato == null,
-                      color: Colors.grey,
-                      onTap: () => setState(() => _filtroFatturato = null),
-                    ),
-                    SizedBox(width: 8),
-                    _filtroChip(
-                      label: '✓ Fatturato',
-                      selected: _filtroFatturato == true,
-                      color: Colors.orange,
-                      onTap: () => setState(() =>
-                          _filtroFatturato = _filtroFatturato == true ? null : true),
-                    ),
-                    SizedBox(width: 8),
-                    _filtroChip(
-                      label: '✗ Non fatturato',
-                      selected: _filtroFatturato == false,
-                      color: Colors.grey.shade600,
-                      onTap: () => setState(() =>
-                          _filtroFatturato = _filtroFatturato == false ? null : false),
-                    ),
-                  ],
-                ),
 
                 // Banner employee
                 if (!isAdmin && _selectedClient != null)
@@ -282,96 +218,189 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                     style: TextStyle(color: Colors.grey),
                   ))
                 : visApts.isEmpty
-                    ? Center(child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.filter_list_off, color: Colors.grey, size: 40),
-                          SizedBox(height: 8),
-                          Text('Nessun appuntamento con questi filtri',
-                              style: TextStyle(color: Colors.grey)),
-                        ],
+                    ? Center(child: Text(
+                        'Nessun appuntamento nel periodo selezionato',
+                        style: TextStyle(color: Colors.grey),
                       ))
                     : ListView.builder(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        padding: EdgeInsets.all(12),
                         itemCount: visApts.length,
                         itemBuilder: (context, i) {
                           final apt = visApts[i];
+                          final isUpdating = _updating.contains(apt.id);
+
                           return Card(
-                            margin: EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              title: Text(apt.titolo,
-                                  style: TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text(
-                                '${DateHelpers.formatDate(apt.data)} • '
-                                '${apt.oraInizio}–${apt.oraFine} • '
-                                '${apt.oreTotali.toStringAsFixed(1)}h',
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                            margin: EdgeInsets.only(bottom: 10),
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    DateHelpers.formatCurrency(apt.totale),
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.teal),
-                                  ),
-                                  SizedBox(height: 2),
+
+                                  // RIGA 1: titolo + importo
                                   Row(
-                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      // Badge fatturato
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: apt.fatturato
-                                              ? Colors.orange.withOpacity(0.15)
-                                              : Colors.grey.withOpacity(0.12),
-                                          borderRadius: BorderRadius.circular(3),
-                                          border: Border.all(
-                                            color: apt.fatturato
-                                                ? Colors.orange
-                                                : Colors.grey.shade400,
-                                            width: 0.8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          apt.fatturato ? 'Fatt.' : 'No fatt.',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: apt.fatturato
-                                                ? Colors.orange.shade800
-                                                : Colors.grey.shade500,
+                                      Expanded(
+                                        child: Text(apt.titolo,
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14)),
+                                      ),
+                                      Text(
+                                        DateHelpers.formatCurrency(apt.totale),
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.teal,
+                                            fontSize: 15),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 4),
+
+                                  // RIGA 2: data + orario + ore
+                                  Text(
+                                    '${DateHelpers.formatDate(apt.data)}  •  '
+                                    '${apt.oraInizio}–${apt.oraFine}  •  '
+                                    '${apt.oreTotali.toStringAsFixed(1)}h',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                  SizedBox(height: 10),
+
+                                  // RIGA 3: toggle FATTURATO + toggle PAGATO
+                                  Row(
+                                    children: [
+
+                                      // ✅ TOGGLE FATTURATO
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: isUpdating
+                                              ? null
+                                              : () => _toggleFatturato(apt),
+                                          child: AnimatedContainer(
+                                            duration: Duration(milliseconds: 180),
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: apt.fatturato
+                                                  ? Colors.orange.withOpacity(0.15)
+                                                  : Colors.grey.withOpacity(0.08),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: apt.fatturato
+                                                    ? Colors.orange
+                                                    : Colors.grey.shade300,
+                                                width: apt.fatturato ? 1.5 : 1.0,
+                                              ),
+                                            ),
+                                            child: isUpdating
+                                                ? Center(
+                                                    child: SizedBox(
+                                                      width: 14, height: 14,
+                                                      child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Colors.orange),
+                                                    ),
+                                                  )
+                                                : Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.center,
+                                                    children: [
+                                                      Icon(
+                                                        apt.fatturato
+                                                            ? Icons.receipt_long
+                                                            : Icons.receipt_long_outlined,
+                                                        size: 14,
+                                                        color: apt.fatturato
+                                                            ? Colors.orange.shade800
+                                                            : Colors.grey.shade500,
+                                                      ),
+                                                      SizedBox(width: 5),
+                                                      Text(
+                                                        apt.fatturato
+                                                            ? 'Fatturato'
+                                                            : 'Non fatturato',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: apt.fatturato
+                                                              ? Colors.orange.shade800
+                                                              : Colors.grey.shade500,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                           ),
                                         ),
                                       ),
-                                      SizedBox(width: 4),
-                                      // Badge pagato
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 4, vertical: 1),
-                                        decoration: BoxDecoration(
-                                          color: apt.pagato
-                                              ? Colors.green.withOpacity(0.15)
-                                              : Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(3),
-                                          border: Border.all(
-                                            color: apt.pagato
-                                                ? Colors.green
-                                                : Colors.red,
-                                            width: 0.8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          apt.pagato ? 'Pagato' : 'Da pagare',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: apt.pagato
-                                                ? Colors.green.shade700
-                                                : Colors.red.shade700,
+                                      SizedBox(width: 8),
+
+                                      // ✅ TOGGLE PAGATO
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: isUpdating
+                                              ? null
+                                              : () => _togglePagato(apt),
+                                          child: AnimatedContainer(
+                                            duration: Duration(milliseconds: 180),
+                                            padding: EdgeInsets.symmetric(
+                                                vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: apt.pagato
+                                                  ? Colors.green.withOpacity(0.15)
+                                                  : Colors.red.withOpacity(0.07),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: apt.pagato
+                                                    ? Colors.green
+                                                    : Colors.red.shade300,
+                                                width: apt.pagato ? 1.5 : 1.0,
+                                              ),
+                                            ),
+                                            child: isUpdating
+                                                ? Center(
+                                                    child: SizedBox(
+                                                      width: 14, height: 14,
+                                                      child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Colors.green),
+                                                    ),
+                                                  )
+                                                : Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.center,
+                                                    children: [
+                                                      Icon(
+                                                        apt.pagato
+                                                            ? Icons.check_circle
+                                                            : Icons.cancel_outlined,
+                                                        size: 14,
+                                                        color: apt.pagato
+                                                            ? Colors.green.shade700
+                                                            : Colors.red.shade400,
+                                                      ),
+                                                      SizedBox(width: 5),
+                                                      Text(
+                                                        apt.pagato
+                                                            ? 'Pagato'
+                                                            : 'Non pagato',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: apt.pagato
+                                                              ? Colors.green.shade700
+                                                              : Colors.red.shade400,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                           ),
                                         ),
                                       ),
@@ -385,38 +414,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ✅ Chip filtro riutilizzabile
-  Widget _filtroChip({
-    required String label,
-    required bool selected,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 150),
-        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.15) : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? color : Colors.grey.shade300,
-            width: selected ? 1.5 : 1.0,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-            color: selected ? color : Colors.grey.shade600,
-          ),
-        ),
       ),
     );
   }
