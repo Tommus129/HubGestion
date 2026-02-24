@@ -22,7 +22,9 @@ class AppointmentFormScreen extends StatefulWidget {
 class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titoloController = TextEditingController();
-  final _tariffaController = TextEditingController(text: '50');
+
+  // ✅ PRIMA era hardcoded a '50' [cite:52]
+  final _tariffaController = TextEditingController();
 
   final AppointmentService _aptService = AppointmentService();
   final RoomService _roomService = RoomService();
@@ -47,11 +49,18 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   @override
   void initState() {
     super.initState();
+
     _selectedDay = widget.appointment != null
         ? widget.appointment!.data
         : widget.selectedDay;
+
+    // ✅ Tariffa proposta dal profilo utente (se presente), fallback 50 [cite:56][cite:57]
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final tariffaDefault = auth.currentUser?.tariffa ?? 50.0;
+    _tariffaController.text = tariffaDefault.toStringAsFixed(0);
+
     _loadData();
-    if (isEditing) _prefillForm();
+    if (isEditing) _prefillForm(); // in edit sovrascrive con la tariffa dell'appuntamento [cite:52]
   }
 
   void _prefillForm() {
@@ -65,24 +74,25 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     _oraInizio = TimeOfDay(hour: int.parse(s[0]), minute: int.parse(s[1]));
     _oraFine = TimeOfDay(hour: int.parse(e[0]), minute: int.parse(e[1]));
     _durataMinuti = (_oraFine.hour * 60 + _oraFine.minute) -
-                    (_oraInizio.hour * 60 + _oraInizio.minute);
+        (_oraInizio.hour * 60 + _oraInizio.minute);
   }
 
   void _loadData() {
     _roomService.getRooms().listen((rooms) => setState(() {
-      _rooms = rooms;
-      if (isEditing && _selectedRoom == null) {
-        final m = rooms.where((r) => r.id == widget.appointment!.roomId);
-        if (m.isNotEmpty) _selectedRoom = m.first;
-      }
-    }));
+          _rooms = rooms;
+          if (isEditing && _selectedRoom == null) {
+            final m = rooms.where((r) => r.id == widget.appointment!.roomId);
+            if (m.isNotEmpty) _selectedRoom = m.first;
+          }
+        }));
     _clientService.getClients().listen((clients) => setState(() {
-      _clients = clients;
-      if (isEditing && _selectedClient == null) {
-        final m = clients.where((c) => c.id == widget.appointment!.clientId);
-        if (m.isNotEmpty) _selectedClient = m.first;
-      }
-    }));
+          _clients = clients;
+          if (isEditing && _selectedClient == null) {
+            final m =
+                clients.where((c) => c.id == widget.appointment!.clientId);
+            if (m.isNotEmpty) _selectedClient = m.first;
+          }
+        }));
   }
 
   // ✅ DatePicker per cambiare giorno
@@ -108,7 +118,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     setState(() {
       _oraFine = t;
       final diff = (t.hour * 60 + t.minute) -
-                   (_oraInizio.hour * 60 + _oraInizio.minute);
+          (_oraInizio.hour * 60 + _oraInizio.minute);
       if (diff > 0) _durataMinuti = diff;
     });
   }
@@ -161,57 +171,75 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedRoom == null) { _err('Seleziona una stanza'); return; }
-    if (_selectedClient == null) { _err('Seleziona un cliente'); return; }
+    if (_selectedRoom == null) {
+      _err('Seleziona una stanza');
+      return;
+    }
+    if (_selectedClient == null) {
+      _err('Seleziona un cliente');
+      return;
+    }
     setState(() => _loading = true);
 
     final auth = Provider.of<AuthService>(context, listen: false);
     final inicio = _timeStr(_oraInizio);
     final fine = _timeStr(_oraFine);
+
     // ✅ Data normalizzata senza ore/minuti per il confronto Firestore
-    final dataNorm = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+    final dataNorm =
+        DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
 
     // ── Controllo conflitto STANZA ──────────────────────────────
     final roomConflict = await _aptService.checkRoomConflict(
-      _selectedRoom!.id!, dataNorm, inicio, fine,
+      _selectedRoom!.id!,
+      dataNorm,
+      inicio,
+      fine,
       excludeId: widget.appointment?.id,
     );
     if (roomConflict != null && mounted) {
       final go = await _showConflictDialog(
         titolo: 'Conflitto Stanza',
-        messaggio:
-            '"${_selectedRoom!.name}" è già occupata\n'
+        messaggio: '"${_selectedRoom!.name}" è già occupata\n'
             'da "${roomConflict.titolo}"\n'
             '(${roomConflict.oraInizio} – ${roomConflict.oraFine})\n\n'
             'Vuoi continuare comunque?',
         colore: Colors.orange,
       );
-      if (!go) { setState(() => _loading = false); return; }
+      if (!go) {
+        setState(() => _loading = false);
+        return;
+      }
     }
 
     // ── Controllo conflitto CLIENTE ✅ NUOVO ────────────────────
     final clientConflict = await _aptService.checkClientConflict(
-      _selectedClient!.id!, dataNorm, inicio, fine,
+      _selectedClient!.id!,
+      dataNorm,
+      inicio,
+      fine,
       excludeId: widget.appointment?.id,
     );
     if (clientConflict != null && mounted) {
       final go = await _showConflictDialog(
         titolo: 'Conflitto Cliente',
-        messaggio:
-            '"${_selectedClient!.fullName}" ha già un appuntamento\n'
+        messaggio: '"${_selectedClient!.fullName}" ha già un appuntamento\n'
             'in questo orario: "${clientConflict.titolo}"\n'
             '(${clientConflict.oraInizio} – ${clientConflict.oraFine})\n\n'
             'Vuoi continuare comunque?',
         colore: Colors.red,
       );
-      if (!go) { setState(() => _loading = false); return; }
+      if (!go) {
+        setState(() => _loading = false);
+        return;
+      }
     }
 
     try {
       if (isEditing) {
         await _aptService.updateAppointment(widget.appointment!.id!, {
           'titolo': _titoloController.text,
-          'data': Timestamp.fromDate(dataNorm), // ✅ usa Timestamp (import ok)
+          'data': Timestamp.fromDate(dataNorm), // ✅ usa Timestamp
           'oraInizio': inicio,
           'oraFine': fine,
           'oreTotali': _oreTotali,
@@ -244,8 +272,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     }
   }
 
-  void _err(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red));
+  void _err(String msg) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
 
   @override
   Widget build(BuildContext context) {
@@ -263,14 +291,14 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // TITOLO
               TextFormField(
                 controller: _titoloController,
                 decoration: InputDecoration(
                   labelText: 'Titolo *',
                   prefixIcon: Icon(Icons.title),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 validator: (v) => v!.isEmpty ? 'Campo obbligatorio' : null,
               ),
@@ -295,7 +323,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                         '${_selectedDay.day.toString().padLeft(2, '0')}/'
                         '${_selectedDay.month.toString().padLeft(2, '0')}/'
                         '${_selectedDay.year}',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600),
                       ),
                     ),
                     Icon(Icons.edit_calendar, color: primary, size: 18),
@@ -305,9 +334,12 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
               SizedBox(height: 20),
 
               // ORARI
-              Text('Orario', style: TextStyle(
-                  fontWeight: FontWeight.w600, color: Colors.grey[700],
-                  fontSize: 13, letterSpacing: 0.5)),
+              Text('Orario',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                      fontSize: 13,
+                      letterSpacing: 0.5)),
               SizedBox(height: 10),
 
               Row(
@@ -322,12 +354,15 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                   ),
                   SizedBox(width: 12),
                   Column(children: [
-                    Text('Durata', style: TextStyle(
-                        fontSize: 12, color: Colors.grey[600],
-                        fontWeight: FontWeight.w500)),
+                    Text('Durata',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500)),
                     SizedBox(height: 4),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                       decoration: BoxDecoration(
                         color: primary.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
@@ -337,22 +372,33 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                         InkWell(
                           onTap: () => setState(() {
                             _durataMinuti = (_durataMinuti + 15).clamp(15, 480);
-                            final t = _oraInizio.hour * 60 + _oraInizio.minute + _durataMinuti;
-                            _oraFine = TimeOfDay(hour: (t ~/ 60) % 24, minute: t % 60);
+                            final t = _oraInizio.hour * 60 +
+                                _oraInizio.minute +
+                                _durataMinuti;
+                            _oraFine = TimeOfDay(
+                                hour: (t ~/ 60) % 24, minute: t % 60);
                           }),
-                          child: Icon(Icons.add_circle_outline, color: primary, size: 22),
+                          child: Icon(Icons.add_circle_outline,
+                              color: primary, size: 22),
                         ),
                         SizedBox(height: 4),
-                        Text(_durataLabel(), style: TextStyle(
-                            color: primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(_durataLabel(),
+                            style: TextStyle(
+                                color: primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14)),
                         SizedBox(height: 4),
                         InkWell(
                           onTap: () => setState(() {
                             _durataMinuti = (_durataMinuti - 15).clamp(15, 480);
-                            final t = _oraInizio.hour * 60 + _oraInizio.minute + _durataMinuti;
-                            _oraFine = TimeOfDay(hour: (t ~/ 60) % 24, minute: t % 60);
+                            final t = _oraInizio.hour * 60 +
+                                _oraInizio.minute +
+                                _durataMinuti;
+                            _oraFine = TimeOfDay(
+                                hour: (t ~/ 60) % 24, minute: t % 60);
                           }),
-                          child: Icon(Icons.remove_circle_outline, color: primary, size: 22),
+                          child: Icon(Icons.remove_circle_outline,
+                              color: primary, size: 22),
                         ),
                       ]),
                     ),
@@ -375,16 +421,20 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 decoration: InputDecoration(
                   labelText: 'Stanza *',
                   prefixIcon: Icon(Icons.meeting_room),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 items: _rooms.map((r) {
-                  final c = Color(int.parse(
-                      'FF${r.color.replaceAll("#", "")}', radix: 16));
+                  final c = Color(
+                      int.parse('FF${r.color.replaceAll("#", "")}', radix: 16));
                   return DropdownMenuItem(
                     value: r,
                     child: Row(children: [
-                      Container(width: 12, height: 12,
-                          decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                      Container(
+                          width: 12,
+                          height: 12,
+                          decoration:
+                              BoxDecoration(color: c, shape: BoxShape.circle)),
                       SizedBox(width: 8),
                       Text(r.name),
                     ]),
@@ -401,11 +451,12 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 decoration: InputDecoration(
                   labelText: 'Cliente *',
                   prefixIcon: Icon(Icons.person),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                items: _clients.map((c) => DropdownMenuItem(
-                  value: c, child: Text(c.fullName),
-                )).toList(),
+                items: _clients
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c.fullName)))
+                    .toList(),
                 onChanged: (v) => setState(() => _selectedClient = v),
                 hint: Text('Seleziona cliente'),
               ),
@@ -419,7 +470,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 decoration: InputDecoration(
                   labelText: 'Tariffa €/ora',
                   prefixIcon: Icon(Icons.euro),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
               ),
               SizedBox(height: 12),
@@ -438,15 +490,18 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(
                         '${_timeStr(_oraInizio)} → ${_timeStr(_oraFine)}  •  ${_durataLabel()}',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        style:
+                            TextStyle(color: Colors.grey[600], fontSize: 12),
                       ),
                       SizedBox(height: 2),
                       Text('Totale stimato',
                           style: TextStyle(color: primary, fontSize: 13)),
                     ]),
                     Text('€ ${_totale.toStringAsFixed(2)}',
-                        style: TextStyle(color: primary,
-                            fontWeight: FontWeight.bold, fontSize: 22)),
+                        style: TextStyle(
+                            color: primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22)),
                   ],
                 ),
               ),
@@ -455,29 +510,33 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
               // FATTURATO / PAGATO (solo modifica)
               if (isEditing) ...[
                 Row(children: [
-                  Expanded(child: CheckboxListTile(
-                    title: Text('Fatturato', style: TextStyle(fontSize: 13)),
-                    value: _fatturato,
-                    activeColor: Colors.orange,
-                    dense: true,
-                    onChanged: (v) => setState(() => _fatturato = v!),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: Colors.grey[300]!),
+                  Expanded(
+                    child: CheckboxListTile(
+                      title: Text('Fatturato', style: TextStyle(fontSize: 13)),
+                      value: _fatturato,
+                      activeColor: Colors.orange,
+                      dense: true,
+                      onChanged: (v) => setState(() => _fatturato = v!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.grey[300]!),
+                      ),
                     ),
-                  )),
+                  ),
                   SizedBox(width: 8),
-                  Expanded(child: CheckboxListTile(
-                    title: Text('Pagato', style: TextStyle(fontSize: 13)),
-                    value: _pagato,
-                    activeColor: Colors.green,
-                    dense: true,
-                    onChanged: (v) => setState(() => _pagato = v!),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: BorderSide(color: Colors.grey[300]!),
+                  Expanded(
+                    child: CheckboxListTile(
+                      title: Text('Pagato', style: TextStyle(fontSize: 13)),
+                      value: _pagato,
+                      activeColor: Colors.green,
+                      dense: true,
+                      onChanged: (v) => setState(() => _pagato = v!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: Colors.grey[300]!),
+                      ),
                     ),
-                  )),
+                  ),
                 ]),
                 SizedBox(height: 16),
               ],
@@ -489,7 +548,9 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _loading ? null : _save,
                   icon: _loading
-                      ? SizedBox(width: 18, height: 18,
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
                       : Icon(isEditing ? Icons.save : Icons.add),
