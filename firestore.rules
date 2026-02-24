@@ -11,22 +11,26 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isLoggedIn();
       allow create: if isLoggedIn() && request.auth.uid == userId;
-      allow update: if isAdminLevel();
+      allow update: if isAdminLevel() || request.auth.uid == userId;
       allow delete: if false;
     }
+
     match /rooms/{roomId} {
       allow read: if isLoggedIn();
       allow create, update, delete: if isAdminLevel();
     }
+
     match /clients/{clientId} {
       allow read, create, update: if isLoggedIn();
       allow delete: if isAdminLevel();
     }
+
     match /appointments/{appointmentId} {
       allow read, create: if isLoggedIn();
       allow update: if isAdminLevel() || resource.data.userId == request.auth.uid;
       allow delete: if false;
     }
+
     match /logs/{logId} {
       allow read: if isAdminLevel();
       allow create: if isLoggedIn();

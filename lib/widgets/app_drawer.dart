@@ -7,6 +7,7 @@ import '../screens/reports/client_report_screen.dart';
 import '../screens/reports/payments_report_screen.dart';
 import '../screens/admin/rooms_screen.dart';
 import '../screens/admin/users_roles_screen.dart';
+import '../screens/admin/logs_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   @override
@@ -38,10 +39,7 @@ class AppDrawer extends StatelessWidget {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ClientsListScreen()))),
 
           Divider(),
-          Padding(
-            padding: EdgeInsets.only(left: 16, top: 4, bottom: 4),
-            child: Text('REPORT', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-          ),
+          _sectionLabel('REPORT'),
 
           _drawerItem(context, Icons.person_search, 'Report Cliente', () =>
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ClientReportScreen()))),
@@ -51,14 +49,16 @@ class AppDrawer extends StatelessWidget {
 
           if (user?.isAdmin == true) ...[
             Divider(),
-            Padding(
-              padding: EdgeInsets.only(left: 16, top: 4, bottom: 4),
-              child: Text('AMMINISTRAZIONE', style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-            ),
+            _sectionLabel('AMMINISTRAZIONE'),
+
             _drawerItem(context, Icons.meeting_room, 'Stanze', () =>
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => RoomsScreen()))),
+
             _drawerItem(context, Icons.manage_accounts, 'Gestione Utenti', () =>
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => UsersRolesScreen()))),
+
+            _drawerItem(context, Icons.shield, 'Log Sicurezza', () =>
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LogsScreen()))),
           ],
 
           Divider(),
@@ -77,6 +77,13 @@ class AppDrawer extends StatelessWidget {
       leading: Icon(icon, color: Colors.teal),
       title: Text(title),
       onTap: () { Navigator.pop(context); onTap(); },
+    );
+  }
+
+  Widget _sectionLabel(String label) {
+    return Padding(
+      padding: EdgeInsets.only(left: 16, top: 4, bottom: 4),
+      child: Text(label, style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
     );
   }
 }
