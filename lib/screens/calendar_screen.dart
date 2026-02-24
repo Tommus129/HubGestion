@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../services/appointment_service.dart';
 import '../services/auth_service.dart';
 import '../models/appointment.dart';
+import '../widgets/app_drawer.dart';
 import 'appointment_form_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -32,40 +33,25 @@ class _CalendarScreenState extends State<CalendarScreen> {
     ).toList();
   }
 
-  Color _hexToColor(String hex) {
-    final h = hex.replaceAll('#', '');
-    return Color(int.parse('FF$h', radix: 16));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Calendario'),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () => auth.signOut(),
-          ),
-        ],
       ),
+      drawer: AppDrawer(),
       body: StreamBuilder<List<Appointment>>(
         stream: _service.getAppointments(
           DateTime(_focusedDay.year, _focusedDay.month - 1, 1),
           DateTime(_focusedDay.year, _focusedDay.month + 2, 0),
         ),
         builder: (context, snapshot) {
-          if (snapshot.hasData) {
-            _appointments = snapshot.data!;
-          }
+          if (snapshot.hasData) _appointments = snapshot.data!;
 
           return Column(
             children: [
-              // CALENDARIO
               TableCalendar<Appointment>(
                 firstDay: DateTime(2024),
                 lastDay: DateTime(2028),
@@ -73,31 +59,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 calendarFormat: _calendarFormat,
                 selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                 eventLoader: _getEventsForDay,
-                onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _selectedDay = selectedDay;
-                    _focusedDay = focusedDay;
-                  });
+                onDaySelected: (selected, focused) {
+                  setState(() { _selectedDay = selected; _focusedDay = focused; });
                 },
-                onFormatChanged: (format) {
-                  setState(() => _calendarFormat = format);
-                },
-                onPageChanged: (focusedDay) {
-                  setState(() => _focusedDay = focusedDay);
-                },
+                onFormatChanged: (f) => setState(() => _calendarFormat = f),
+                onPageChanged: (f) => setState(() => _focusedDay = f),
                 calendarStyle: CalendarStyle(
-                  todayDecoration: BoxDecoration(
-                    color: Colors.teal.withOpacity(0.4),
-                    shape: BoxShape.circle,
-                  ),
-                  selectedDecoration: BoxDecoration(
-                    color: Colors.teal,
-                    shape: BoxShape.circle,
-                  ),
-                  markerDecoration: BoxDecoration(
-                    color: Colors.teal[700],
-                    shape: BoxShape.circle,
-                  ),
+                  todayDecoration: BoxDecoration(color: Colors.teal.withOpacity(0.4), shape: BoxShape.circle),
+                  selectedDecoration: BoxDecoration(color: Colors.teal, shape: BoxShape.circle),
+                  markerDecoration: BoxDecoration(color: Colors.teal[700], shape: BoxShape.circle),
                 ),
                 headerStyle: HeaderStyle(
                   formatButtonDecoration: BoxDecoration(
@@ -107,24 +77,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   formatButtonTextStyle: TextStyle(color: Colors.teal),
                 ),
               ),
-
               Divider(height: 1),
-
-              // LISTA APPUNTAMENTI GIORNO SELEZIONATO
-              Expanded(
-                child: _buildEventList(),
-              ),
+              Expanded(child: _buildEventList()),
             ],
           );
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AppointmentFormScreen(selectedDay: _selectedDay ?? DateTime.now()),
-          ),
-        ),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => AppointmentFormScreen(selectedDay: _selectedDay ?? DateTime.now()),
+        )),
         backgroundColor: Colors.teal,
         icon: Icon(Icons.add, color: Colors.white),
         label: Text('Nuovo', style: TextStyle(color: Colors.white)),
@@ -134,7 +96,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Widget _buildEventList() {
     final events = _getEventsForDay(_selectedDay ?? _focusedDay);
-
     if (events.isEmpty) {
       return Center(
         child: Column(
@@ -147,29 +108,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ),
       );
     }
-
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: events.length,
-      itemBuilder: (context, index) {
-        final apt = events[index];
+      itemBuilder: (context, i) {
+        final apt = events[i];
+        // FIX: usa isNotEmpty e lunghezza sicura
+        final oraLabel = apt.oraInizio.isNotEmpty
+            ? apt.oraInizio.substring(0, apt.oraInizio.length.clamp(0, 5))
+            : '--';
         return Card(
           margin: EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: Colors.teal,
-              child: Text(apt.oraInizio.substring(0, 2),
-                  style: TextStyle(color: Colors.white, fontSize: 12)),
+              child: Text(
+                oraLabel.length >= 2 ? oraLabel.substring(0, 2) : oraLabel,
+                style: TextStyle(color: Colors.white, fontSize: 12),
+              ),
             ),
             title: Text(apt.titolo, style: TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('${apt.oraInizio} - ${apt.oraFine}'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (apt.fatturato)
-                  Icon(Icons.receipt, color: Colors.orange, size: 16),
-                if (apt.pagato)
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
+                if (apt.fatturato) Icon(Icons.receipt, color: Colors.orange, size: 16),
+                if (apt.pagato) Icon(Icons.check_circle, color: Colors.green, size: 16),
               ],
             ),
           ),
