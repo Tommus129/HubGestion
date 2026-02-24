@@ -27,6 +27,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   String _filtroPageto    = 'tutti';
 
   List<Client> _clients = [];
+  List<Appointment> _allFetched = [];
   List<Appointment> _appointments = [];
   Map<String, String> _userNames = {};
   bool _loading = false;
@@ -50,10 +51,45 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     });
   }
 
-  Future<void> _search() async {
+  // ✅ Chiamata ogni volta che cambia QUALSIASI filtro
+  Future<void> _autoSearch() async {
     if (_selectedClient == null) return;
-    setState(() => _loading = true);
 
+    // Se custom ma date non impostate, aspetta
+    if (_periodoType == 'custom' && (_customFrom == null || _customTo == null)) return;
+
+    setState(() { _loading = true; _appointments = []; _allFetched = []; });
+
+    try {
+      // ✅ Query minima: solo clientId (no compound index necessario)
+      final snap = await _db
+          .collection('appointments')
+          .where('clientId', isEqualTo: _selectedClient!.id)
+          .orderBy('data')
+          .get();
+
+      debugPrint('>>> Trovati ${snap.docs.length} doc per cliente ${_selectedClient!.fullName}');
+
+      final all = snap.docs.map((d) {
+        try { return Appointment.fromFirestore(d); }
+        catch (e) { debugPrint('>>> Parse error ${d.id}: $e'); return null; }
+      }).whereType<Appointment>().toList();
+
+      setState(() { _allFetched = all; });
+      _applyLocalFilters();
+    } catch (e) {
+      debugPrint('>>> ERRORE: $e');
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
+        );
+      }
+    }
+  }
+
+  // ✅ Tutti i filtri applicati in memoria (periodo, fatturato, pagato)
+  void _applyLocalFilters() {
     DateTime start;
     DateTime end;
 
@@ -67,42 +103,33 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         end   = DateTime(_selectedYear, 12, 31, 23, 59, 59);
         break;
       case 'custom':
-        if (_customFrom == null || _customTo == null) {
-          setState(() => _loading = false);
-          return;
-        }
+        if (_customFrom == null || _customTo == null) return;
         start = _customFrom!;
         end   = DateTime(_customTo!.year, _customTo!.month, _customTo!.day, 23, 59, 59);
         break;
       default:
-        start = DateTime(2020);
+        start = DateTime(2000);
         end   = DateTime(2099);
     }
 
-    final snap = await _db
-        .collection('appointments')
-        .where('deleted', isEqualTo: false)
-        .where('clientId', isEqualTo: _selectedClient!.id)
-        .where('data', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
-        .where('data', isLessThanOrEqualTo: Timestamp.fromDate(end))
-        .orderBy('data')
-        .get();
+    List<Appointment> filtered = _allFetched.where((a) {
+      if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
+      return true;
+    }).toList();
 
-    List<Appointment> apts =
-        snap.docs.map((d) => Appointment.fromFirestore(d)).toList();
+    if (_filtroFatturato == 'si') filtered = filtered.where((a) => a.fatturato).toList();
+    if (_filtroFatturato == 'no') filtered = filtered.where((a) => !a.fatturato).toList();
+    if (_filtroPageto    == 'si') filtered = filtered.where((a) => a.pagato).toList();
+    if (_filtroPageto    == 'no') filtered = filtered.where((a) => !a.pagato).toList();
 
-    if (_filtroFatturato == 'si') apts = apts.where((a) => a.fatturato).toList();
-    if (_filtroFatturato == 'no') apts = apts.where((a) => !a.fatturato).toList();
-    if (_filtroPageto    == 'si') apts = apts.where((a) => a.pagato).toList();
-    if (_filtroPageto    == 'no') apts = apts.where((a) => !a.pagato).toList();
-
-    setState(() { _appointments = apts; _loading = false; });
+    debugPrint('>>> Filtrati: ${filtered.length} appuntamenti');
+    setState(() { _appointments = filtered; _loading = false; });
   }
 
-  double get _totGuadagno  => _appointments.fold(0, (s, a) => s + a.totale);
-  double get _totPagato    => _appointments.where((a) => a.pagato).fold(0, (s, a) => s + a.totale);
-  double get _totNonFatt   => _appointments.where((a) => !a.fatturato).fold(0, (s, a) => s + a.totale);
-  double get _totOre       => _appointments.fold(0, (s, a) => s + a.oreTotali);
+  double get _totGuadagno => _appointments.fold(0, (s, a) => s + a.totale);
+  double get _totPagato   => _appointments.where((a) => a.pagato).fold(0, (s, a) => s + a.totale);
+  double get _totNonFatt  => _appointments.where((a) => !a.fatturato).fold(0, (s, a) => s + a.totale);
+  double get _totOre      => _appointments.fold(0, (s, a) => s + a.oreTotali);
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +146,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
+            // ── SELEZIONE CLIENTE — avvia ricerca automatica ──────
             DropdownButtonFormField<Client>(
               value: _selectedClient,
               decoration: InputDecoration(
@@ -129,11 +157,16 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               items: _clients.map((c) => DropdownMenuItem(
                 value: c, child: Text(c.fullName),
               )).toList(),
-              onChanged: (v) => setState(() { _selectedClient = v; _appointments = []; }),
-              hint: const Text('Seleziona cliente'),
+              onChanged: (v) {
+                setState(() { _selectedClient = v; _appointments = []; _allFetched = []; });
+                // ✅ Avvia subito la ricerca
+                _autoSearch();
+              },
+              hint: const Text('Seleziona cliente per vedere il report'),
             ),
             const SizedBox(height: 16),
 
+            // ── PERIODO ───────────────────────────────────────────
             _sectionLabel('Periodo', primary),
             const SizedBox(height: 8),
             Wrap(
@@ -161,7 +194,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       items: List.generate(12, (i) => DropdownMenuItem(
                         value: i + 1, child: Text(_monthName(i + 1)),
                       )),
-                      onChanged: (v) => setState(() => _selectedMonth = v!),
+                      onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -177,7 +210,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                     items: List.generate(8, (i) => DropdownMenuItem(
                       value: 2024 + i, child: Text('${2024 + i}'),
                     )),
-                    onChanged: (v) => setState(() => _selectedYear = v!),
+                    onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
                   ),
                 ),
               ]),
@@ -186,20 +219,31 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
             if (_periodoType == 'custom') ...[
               Row(children: [
-                Expanded(child: _datePicker('Dal', _customFrom, (d) => setState(() => _customFrom = d), primary)),
+                Expanded(child: _datePicker('Dal', _customFrom, (d) {
+                  setState(() => _customFrom = d);
+                  _applyLocalFilters();
+                }, primary)),
                 const SizedBox(width: 12),
-                Expanded(child: _datePicker('Al',  _customTo,   (d) => setState(() => _customTo   = d), primary)),
+                Expanded(child: _datePicker('Al', _customTo, (d) {
+                  setState(() => _customTo = d);
+                  _applyLocalFilters();
+                }, primary)),
               ]),
               const SizedBox(height: 12),
             ],
 
+            // ── FILTRI STATO ──────────────────────────────────────
             Row(children: [
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _sectionLabel('Fatturato', primary),
                   const SizedBox(height: 6),
-                  _statoSegmented(value: _filtroFatturato, onChange: (v) => setState(() => _filtroFatturato = v), primary: primary),
+                  _statoSegmented(
+                    value: _filtroFatturato,
+                    onChange: (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); },
+                    primary: primary,
+                  ),
                 ],
               )),
               const SizedBox(width: 12),
@@ -208,26 +252,67 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 children: [
                   _sectionLabel('Pagato', primary),
                   const SizedBox(height: 6),
-                  _statoSegmented(value: _filtroPageto, onChange: (v) => setState(() => _filtroPageto = v), primary: primary),
+                  _statoSegmented(
+                    value: _filtroPageto,
+                    onChange: (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); },
+                    primary: primary,
+                  ),
                 ],
               )),
             ]),
             const SizedBox(height: 20),
 
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: _selectedClient == null || _loading ? null : _search,
-                icon: _loading
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.search),
-                label: const Text('Cerca', style: TextStyle(fontSize: 15)),
+            // ── LOADING ───────────────────────────────────────────
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()),
               ),
-            ),
 
-            if (_appointments.isNotEmpty) ...[
-              const SizedBox(height: 24),
+            // ── NESSUN CLIENTE SELEZIONATO ────────────────────────
+            if (!_loading && _selectedClient == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 40),
+                child: Center(
+                  child: Column(children: [
+                    Icon(Icons.person_search, size: 64, color: Colors.grey[300]),
+                    const SizedBox(height: 12),
+                    Text('Seleziona un cliente per vedere il report',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 15)),
+                  ]),
+                ),
+              ),
+
+            // ── NESSUN RISULTATO ──────────────────────────────────
+            if (!_loading && _selectedClient != null && _appointments.isEmpty && _allFetched.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 40),
+                child: Center(
+                  child: Column(children: [
+                    Icon(Icons.filter_alt_off, size: 48, color: Colors.grey[300]),
+                    const SizedBox(height: 8),
+                    const Text('Nessun appuntamento con questi filtri',
+                        style: TextStyle(color: Colors.grey)),
+                  ]),
+                ),
+              ),
+
+            if (!_loading && _selectedClient != null && _allFetched.isEmpty && _appointments.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 40),
+                child: Center(
+                  child: Column(children: [
+                    Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
+                    const SizedBox(height: 8),
+                    Text('Nessun appuntamento trovato per ${_selectedClient!.fullName}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey)),
+                  ]),
+                ),
+              ),
+
+            // ── RISULTATI ─────────────────────────────────────────
+            if (!_loading && _appointments.isNotEmpty) ...[
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -236,30 +321,17 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 crossAxisSpacing: 10,
                 childAspectRatio: 2.2,
                 children: [
-                  _metricCard('Ore totali',    '${_totOre.toStringAsFixed(1)}h',          Icons.access_time,  primary),
-                  _metricCard('Totale',        DateHelpers.formatCurrency(_totGuadagno),   Icons.euro,         Colors.blueGrey),
-                  _metricCard('Incassato',     DateHelpers.formatCurrency(_totPagato),     Icons.check_circle, Colors.green),
-                  _metricCard('Non fatturato', DateHelpers.formatCurrency(_totNonFatt),    Icons.receipt_long, Colors.red),
+                  _metricCard('Ore totali',    '${_totOre.toStringAsFixed(1)}h',        Icons.access_time,  primary),
+                  _metricCard('Totale',        DateHelpers.formatCurrency(_totGuadagno), Icons.euro,         Colors.blueGrey),
+                  _metricCard('Incassato',     DateHelpers.formatCurrency(_totPagato),   Icons.check_circle, Colors.green),
+                  _metricCard('Non fatturato', DateHelpers.formatCurrency(_totNonFatt),  Icons.receipt_long, Colors.red),
                 ],
               ),
               const SizedBox(height: 20),
-              _sectionLabel('Dettaglio appuntamenti (${_appointments.length})', primary),
+              _sectionLabel('Appuntamenti (${_appointments.length})', primary),
               const SizedBox(height: 10),
               _buildTable(primary, isAdmin),
             ],
-
-            if (_appointments.isEmpty && !_loading && _selectedClient != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 40),
-                child: Center(
-                  child: Column(children: [
-                    Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
-                    const SizedBox(height: 8),
-                    const Text('Nessun appuntamento trovato',
-                        style: TextStyle(color: Colors.grey)),
-                  ]),
-                ),
-              ),
           ],
         ),
       ),
@@ -287,18 +359,21 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         rows: _appointments.map((apt) {
           final uid  = apt.userId;
           final nome = _userNames[uid] ?? (uid.length > 8 ? uid.substring(0, 8) : uid);
-          final tariffa = 'EUR${apt.tariffa.toStringAsFixed(0)}';
           return DataRow(cells: [
-            DataCell(Text(DateHelpers.formatDateShort(apt.data),  style: const TextStyle(fontSize: 12))),
+            DataCell(Text(DateHelpers.formatDateShort(apt.data),
+                style: const TextStyle(fontSize: 12))),
             DataCell(ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 140),
               child: Text(apt.titolo, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             )),
-            DataCell(Text(nome,                                   style: const TextStyle(fontSize: 12))),
-            DataCell(Text(apt.oreTotali.toStringAsFixed(1),       style: const TextStyle(fontSize: 12))),
-            DataCell(Text(tariffa,                                style: const TextStyle(fontSize: 12))),
-            DataCell(Text(DateHelpers.formatCurrency(apt.totale), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+            DataCell(Text(nome, style: const TextStyle(fontSize: 12))),
+            DataCell(Text(apt.oreTotali.toStringAsFixed(1),
+                style: const TextStyle(fontSize: 12))),
+            DataCell(Text('${apt.tariffa.toStringAsFixed(0)} EUR',
+                style: const TextStyle(fontSize: 12))),
+            DataCell(Text(DateHelpers.formatCurrency(apt.totale),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
             DataCell(_statusDot(apt.fatturato, Colors.orange)),
             DataCell(_statusDot(apt.pagato,    Colors.green)),
           ]);
@@ -309,14 +384,16 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
   Widget _statusDot(bool active, Color color) => Icon(
     active ? Icons.check_circle : Icons.radio_button_unchecked,
-    color: active ? color : Colors.grey[300],
-    size: 18,
+    color: active ? color : Colors.grey[300], size: 18,
   );
 
   Widget _periodoChip(String value, String label, Color primary) {
     final active = _periodoType == value;
     return GestureDetector(
-      onTap: () => setState(() { _periodoType = value; _appointments = []; }),
+      onTap: () {
+        setState(() => _periodoType = value);
+        _applyLocalFilters();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
