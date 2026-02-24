@@ -34,6 +34,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Map<String, Color> _userColors = {};
   Map<String, String> _userNames = {};
+  Map<String, String> _clientNames = {}; // ✅ NUOVO: clientId → fullName
   Map<String, Room> _rooms = {};
 
   List<DateTime> get _days {
@@ -46,6 +47,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   void initState() {
     super.initState();
     _loadUsers();
+    _loadClients(); // ✅ NUOVO
     _roomService.getRooms().listen((rooms) =>
         setState(() => _rooms = {for (var r in rooms) r.id!: r}));
   }
@@ -64,8 +66,22 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     setState(() { _userColors = c; _userNames = n; });
   }
 
+  // ✅ NUOVO: carica nome+cognome di tutti i clienti
+  Future<void> _loadClients() async {
+    final snap = await _db.collection('clients').get();
+    final m = <String, String>{};
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      final nome = d['nome']?.toString() ?? '';
+      final cognome = d['cognome']?.toString() ?? '';
+      m[doc.id] = '$nome $cognome'.trim();
+    }
+    setState(() => _clientNames = m);
+  }
+
   Color _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
   String _uName(String uid) => _userNames[uid] ?? '';
+  String _cName(String cid) => _clientNames[cid] ?? ''; // ✅ NUOVO
 
   Color _rColor(String? id) {
     if (id == null || !_rooms.containsKey(id)) return Colors.grey;
@@ -88,20 +104,13 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return (diff.clamp(15, 900) / 60.0) * _hourH;
   }
 
-  // ── ALGORITMO COLONNE per appuntamenti sovrapposti ✅ NUOVO ─────
-  // Restituisce per ogni appuntamento: {colIndex, totalCols}
   Map<String, _ColLayout> _computeLayout(List<Appointment> apts) {
     final result = <String, _ColLayout>{};
-    // Ordina per ora inizio
-    final sorted = [...apts]..sort((a, b) =>
-        a.oraInizio.compareTo(b.oraInizio));
-
-    // Raggruppa in cluster di appuntamenti sovrapposti
+    final sorted = [...apts]..sort((a, b) => a.oraInizio.compareTo(b.oraInizio));
     final clusters = <List<Appointment>>[];
     for (final apt in sorted) {
       bool added = false;
       for (final cluster in clusters) {
-        // Se si sovrappone con almeno uno nel cluster, aggiungilo
         if (cluster.any((c) => _overlaps(c, apt))) {
           cluster.add(apt);
           added = true;
@@ -110,7 +119,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       }
       if (!added) clusters.add([apt]);
     }
-
     for (final cluster in clusters) {
       final n = cluster.length;
       for (int i = 0; i < n; i++) {
@@ -231,7 +239,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         a.data.day == d.day
                       ).toList();
 
-                      // ✅ Calcola layout colonne per questo giorno
                       final layout = _computeLayout(dayApts);
 
                       return SizedBox(
@@ -290,7 +297,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             // LINEA ORA CORRENTE
                             if (today) _buildNowLine(primary),
 
-                            // ── APPUNTAMENTI con layout colonne ✅
+                            // ── APPUNTAMENTI ──────────────────────
                             ...dayApts.map((apt) {
                               final key = apt.id ?? apt.titolo;
                               final col = layout[key] ?? _ColLayout(0, 1);
@@ -302,10 +309,17 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               final isMine = apt.userId == me?.uid;
                               final canSee = isMine || (me?.isAdmin ?? false);
 
-                              // ✅ Larghezza e posizione orizzontale in base alle colonne
+                              // ✅ Nome cliente (solo se canSee)
+                              final clienteNome = canSee ? _cName(apt.clientId) : '';
+
                               final padding = 2.0;
                               final colW = (dw - padding * (col.total + 1)) / col.total;
                               final leftPos = padding + col.index * (colW + padding);
+
+                              // ✅ Soglie altezza adattive per colonne affiancate
+                              final sogliaStanza  = col.total > 1 ? 36.0 : 44.0;
+                              final sogliaCliente = col.total > 1 ? 52.0 : 60.0;
+                              final sogliaTariffa = col.total > 1 ? 70.0 : 76.0;
 
                               return Positioned(
                                 top: top,
@@ -348,7 +362,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
 
-                                                  // ORARIO
+                                                  // ── ORARIO
                                                   Text(
                                                     '${apt.oraInizio}–${apt.oraFine}',
                                                     style: TextStyle(
@@ -359,7 +373,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
 
-                                                  // TITOLO
+                                                  // ── TITOLO
                                                   Text(
                                                     apt.titolo,
                                                     style: TextStyle(
@@ -372,12 +386,12 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
 
-                                                  // STANZA
-                                                  if (room != null && h > 46 && col.total <= 2)
+                                                  // ── STANZA (visibile a tutti)
+                                                  if (room != null && h > sogliaStanza)
                                                     Row(children: [
                                                       Container(
                                                         width: 6, height: 6,
-                                                        margin: EdgeInsets.only(right: 3),
+                                                        margin: EdgeInsets.only(right: 3, top: 1),
                                                         decoration: BoxDecoration(
                                                           color: rColor,
                                                           shape: BoxShape.circle,
@@ -387,7 +401,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                         child: Text(
                                                           room.name,
                                                           style: TextStyle(
-                                                            fontSize: col.total > 1 ? 10 : 13,
+                                                            fontSize: col.total > 1 ? 10 : 12,
                                                             color: rColor,
                                                             fontWeight: FontWeight.w700,
                                                           ),
@@ -396,27 +410,39 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                       ),
                                                     ]),
 
-                                                  // UTENTE
-                                                  if (canSee && h > 62 && col.total == 1 && _uName(apt.userId).isNotEmpty)
-                                                    Text(
-                                                      _uName(apt.userId),
-                                                      style: TextStyle(
-                                                        fontSize: 13,
-                                                        color: uColor,
-                                                        fontWeight: FontWeight.w600,
+                                                  // ── CLIENTE ✅ solo proprietario/admin
+                                                  if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
+                                                    Row(children: [
+                                                      Icon(
+                                                        Icons.person,
+                                                        size: col.total > 1 ? 9 : 11,
+                                                        color: Colors.black45,
                                                       ),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
+                                                      SizedBox(width: 2),
+                                                      Expanded(
+                                                        child: Text(
+                                                          clienteNome,
+                                                          style: TextStyle(
+                                                            fontSize: col.total > 1 ? 10 : 12,
+                                                            color: Colors.black54,
+                                                            fontWeight: FontWeight.w600,
+                                                          ),
+                                                          overflow: TextOverflow.ellipsis,
+                                                          maxLines: 1,
+                                                        ),
+                                                      ),
+                                                    ]),
 
-                                                  // TARIFFA
-                                                  if (canSee && h > 76 && col.total == 1)
+                                                  // ── TARIFFA ✅ solo proprietario/admin
+                                                  if (canSee && h > sogliaTariffa)
                                                     Text(
                                                       '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
                                                       style: TextStyle(
-                                                        fontSize: 13,
-                                                        color: Colors.black45,
+                                                        fontSize: col.total > 1 ? 9 : 11,
+                                                        color: Colors.black38,
+                                                        fontWeight: FontWeight.w500,
                                                       ),
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
 
                                                 ],
@@ -472,7 +498,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   String _dn(int w) => ['LUN','MAR','MER','GIO','VEN','SAB','DOM'][w - 1];
 }
 
-// ── Helper per layout colonne ──────────────────────────────────────
+// ── Helper layout colonne ─────────────────────────────────────────
 class _ColLayout {
   final int index;
   final int total;
