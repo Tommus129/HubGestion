@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../models/appointment.dart';
 import '../widgets/app_drawer.dart';
 import 'appointment_form_screen.dart';
+import 'appointment_detail_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
   @override
@@ -49,7 +50,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ),
         builder: (context, snapshot) {
           if (snapshot.hasData) _appointments = snapshot.data!;
-
           return Column(
             children: [
               TableCalendar<Appointment>(
@@ -113,13 +113,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
       itemCount: events.length,
       itemBuilder: (context, i) {
         final apt = events[i];
-        // FIX: usa isNotEmpty e lunghezza sicura
-        final oraLabel = apt.oraInizio.isNotEmpty
-            ? apt.oraInizio.substring(0, apt.oraInizio.length.clamp(0, 5))
-            : '--';
+        final oraLabel = apt.oraInizio.isNotEmpty ? apt.oraInizio : '--:--';
         return Card(
           margin: EdgeInsets.only(bottom: 8),
           child: ListTile(
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => AppointmentDetailScreen(appointment: apt),
+            )),
             leading: CircleAvatar(
               backgroundColor: Colors.teal,
               child: Text(
@@ -134,6 +134,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               children: [
                 if (apt.fatturato) Icon(Icons.receipt, color: Colors.orange, size: 16),
                 if (apt.pagato) Icon(Icons.check_circle, color: Colors.green, size: 16),
+                Icon(Icons.chevron_right, color: Colors.grey),
               ],
             ),
           ),
