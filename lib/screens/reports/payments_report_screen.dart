@@ -19,7 +19,10 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   List<Appointment> _all = [];
   String _periodo = 'mese';
   String _filtroFatturato = 'tutti';
-  String _filtroPagato = 'tutti';
+  String _filtroPagato    = 'tutti';
+  String? _filtroUserId;
+  List<Map<String, dynamic>> _userList = [];
+
   final DateTime _now = DateTime.now();
   bool _canSeeAll = false;
   String? _myUid;
@@ -48,6 +51,13 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         for (final d in clients.docs)
           d.id: '${d.data()['nome'] ?? ''} ${d.data()['cognome'] ?? ''}'.trim()
       };
+      _userList = users.docs.map((d) => {
+        'uid': d.id,
+        'name': (d.data()['displayName']?.toString().isNotEmpty == true
+            ? d.data()['displayName']
+            : d.data()['email']) ?? d.id,
+      }).toList()
+        ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
     });
   }
 
@@ -68,7 +78,13 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     }
     _aptService.getAppointments(start, end).listen((apts) {
       setState(() {
-        _all = _canSeeAll ? apts : apts.where((a) => a.userId == _myUid).toList();
+        if (!_canSeeAll) {
+          _all = apts.where((a) => a.userId == _myUid).toList();
+        } else if (_filtroUserId == null) {
+          _all = apts;
+        } else {
+          _all = apts.where((a) => a.userId == _filtroUserId).toList();
+        }
       });
     });
   }
@@ -94,14 +110,17 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final auth    = Provider.of<AuthService>(context);
-    final me      = auth.currentUser;
+    final primary   = Theme.of(context).colorScheme.primary;
+    final auth      = Provider.of<AuthService>(context);
+    final me        = auth.currentUser;
     final canSeeAll = me?.isAdmin ?? false;
     final myUid     = me?.uid;
+
     if (canSeeAll != _canSeeAll || myUid != _myUid) {
       _canSeeAll = canSeeAll;
       _myUid     = myUid;
+      // Default: admin vede i propri
+      if (_filtroUserId == null && myUid != null) _filtroUserId = myUid;
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAppointments());
     }
 
@@ -118,6 +137,8 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+
+                // Banner employee
                 if (!canSeeAll)
                   Container(
                     width: double.infinity,
@@ -136,6 +157,68 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                     ]),
                   ),
 
+                // ── Selettore utente (solo admin/presidente) ──
+                if (canSeeAll) ...[
+                  DropdownButtonFormField<String?>(
+                    value: _filtroUserId,
+                    decoration: InputDecoration(
+                      labelText: 'Visualizza report di',
+                      prefixIcon: const Icon(Icons.person_outline, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                    items: [
+                      // I miei
+                      DropdownMenuItem<String?>(
+                        value: myUid,
+                        child: Row(children: [
+                          Icon(Icons.person, size: 16, color: primary),
+                          const SizedBox(width: 8),
+                          const Text('I miei', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                      // Tutti
+                      DropdownMenuItem<String?>(
+                        value: null,
+                        child: Row(children: [
+                          Icon(Icons.group, size: 16, color: Colors.blueGrey[400]),
+                          const SizedBox(width: 8),
+                          const Text('Tutti gli utenti'),
+                        ]),
+                      ),
+                      // Lista utenti
+                      ..._userList
+                          .where((u) => u['uid'] != myUid)
+                          .map((u) => DropdownMenuItem<String?>(
+                            value: u['uid'] as String,
+                            child: Row(children: [
+                              CircleAvatar(
+                                radius: 10,
+                                backgroundColor: primary.withOpacity(0.12),
+                                child: Text(
+                                  (u['name'] as String).isNotEmpty
+                                      ? (u['name'] as String)[0].toUpperCase()
+                                      : 'U',
+                                  style: TextStyle(fontSize: 9, color: primary,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(child: Text(u['name'] as String,
+                                  overflow: TextOverflow.ellipsis)),
+                            ]),
+                          )),
+                    ],
+                    onChanged: (v) {
+                      setState(() => _filtroUserId = v);
+                      _loadAppointments();
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                // ── Chips periodo ──
                 Row(children: ['mese', 'anno', 'sempre'].map((p) {
                   final active = _periodo == p;
                   final label  = p == 'mese' ? 'Mese' : p == 'anno' ? 'Anno' : 'Sempre';
@@ -164,19 +247,26 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 }).toList()),
                 const SizedBox(height: 10),
 
+                // ── Filtri fatturato/pagato ──
                 Wrap(
                   spacing: 6, runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text('Fatturato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                    _segBtn('tutti', 'Tutti', _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
-                    _segBtn('si',    'Sì',    _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
-                    _segBtn('no',    'No',    _filtroFatturato, (v) => setState(() => _filtroFatturato = v), primary),
+                    _segBtn('tutti', 'Tutti', _filtroFatturato,
+                        (v) => setState(() => _filtroFatturato = v), primary),
+                    _segBtn('si', 'Sì', _filtroFatturato,
+                        (v) => setState(() => _filtroFatturato = v), primary),
+                    _segBtn('no', 'No', _filtroFatturato,
+                        (v) => setState(() => _filtroFatturato = v), primary),
                     const SizedBox(width: 8),
                     Text('Pagato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                    _segBtn('tutti', 'Tutti', _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
-                    _segBtn('si',    'Sì',    _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
-                    _segBtn('no',    'No',    _filtroPagato, (v) => setState(() => _filtroPagato = v), primary),
+                    _segBtn('tutti', 'Tutti', _filtroPagato,
+                        (v) => setState(() => _filtroPagato = v), primary),
+                    _segBtn('si', 'Sì', _filtroPagato,
+                        (v) => setState(() => _filtroPagato = v), primary),
+                    _segBtn('no', 'No', _filtroPagato,
+                        (v) => setState(() => _filtroPagato = v), primary),
                   ],
                 ),
               ],
@@ -189,21 +279,26 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(children: [
-              _metricBox(canSeeAll ? 'Potenziale' : 'I miei incassi',
-                  DateHelpers.formatCurrency(_potenziale), primary, Icons.trending_up, _potenziale, _potenziale),
+              _metricBox(
+                  _filtroUserId == null && canSeeAll ? 'Potenziale totale' : 'Potenziale',
+                  DateHelpers.formatCurrency(_potenziale),
+                  primary, Icons.trending_up, _potenziale, _potenziale),
               const SizedBox(width: 8),
               _metricBox('Incassato',
-                  DateHelpers.formatCurrency(_incassato), Colors.green, Icons.check_circle_outline, _incassato, _potenziale),
+                  DateHelpers.formatCurrency(_incassato),
+                  Colors.green, Icons.check_circle_outline, _incassato, _potenziale),
               const SizedBox(width: 8),
               _metricBox('Fatt. non pag.',
-                  DateHelpers.formatCurrency(_fatturatoNP), Colors.orange, Icons.receipt_outlined, _fatturatoNP, _potenziale),
+                  DateHelpers.formatCurrency(_fatturatoNP),
+                  Colors.orange, Icons.receipt_outlined, _fatturatoNP, _potenziale),
               const SizedBox(width: 8),
               _metricBox('Non fatturato',
-                  DateHelpers.formatCurrency(_nonFatturato), Colors.red, Icons.warning_amber_outlined, _nonFatturato, _potenziale),
+                  DateHelpers.formatCurrency(_nonFatturato),
+                  Colors.red, Icons.warning_amber_outlined, _nonFatturato, _potenziale),
             ]),
           ),
 
-          // ── HEADER ──────────────────────────────────────────────
+          // ── HEADER LISTA ────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
             child: Row(
@@ -253,8 +348,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
 
   // ── CARD ────────────────────────────────────────────────────────────────────
   Widget _aptCard(Appointment apt, Color primary, bool isAdmin) {
-    final personaNome = _userNames[apt.userId]   ?? apt.userId;
-    final clienteNome = _clientNames[apt.clientId] ?? (apt.clientId.isNotEmpty ? apt.clientId : '—');
+    final personaNome = _userNames[apt.userId] ?? apt.userId;
+    final clienteNome = _clientNames[apt.clientId] ??
+        (apt.clientId.isNotEmpty ? apt.clientId : '—');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -262,7 +358,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -270,32 +368,32 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── Riga 1: titolo + importo ──
+            // Riga 1: titolo + importo
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(apt.titolo,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${DateHelpers.formatDate(apt.data)}  •  ${apt.oraInizio}–${apt.oraFine}',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                      ),
-                    ],
-                  ),
-                ),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(apt.titolo,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${DateHelpers.formatDate(apt.data)}  •  ${apt.oraInizio}–${apt.oraFine}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                  ],
+                )),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(DateHelpers.formatCurrency(apt.totale),
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: primary)),
-                    Text('${apt.oreTotali.toStringAsFixed(1)}h × ${apt.tariffa.toStringAsFixed(0)}€/h',
+                        style: TextStyle(fontWeight: FontWeight.bold,
+                            fontSize: 15, color: primary)),
+                    Text('${apt.oreTotali.toStringAsFixed(1)}h'
+                        ' × ${apt.tariffa.toStringAsFixed(0)}€/h',
                         style: TextStyle(fontSize: 11, color: Colors.grey[400])),
                   ],
                 ),
@@ -306,62 +404,63 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             Divider(height: 1, color: Colors.grey.shade100),
             const SizedBox(height: 8),
 
-            // ── Riga 2: persona + cliente ──
-            Row(
-              children: [
-                // Persona
-                Expanded(
-                  child: Row(children: [
-                    CircleAvatar(
-                      radius: 12,
-                      backgroundColor: primary.withOpacity(0.12),
-                      child: Text(
-                        personaNome.isNotEmpty ? personaNome[0].toUpperCase() : 'U',
-                        style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Persona', style: TextStyle(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w500)),
-                        Text(personaNome,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    )),
-                  ]),
+            // Riga 2: persona + cliente
+            Row(children: [
+              Expanded(child: Row(children: [
+                CircleAvatar(
+                  radius: 12,
+                  backgroundColor: primary.withOpacity(0.12),
+                  child: Text(
+                    personaNome.isNotEmpty ? personaNome[0].toUpperCase() : 'U',
+                    style: TextStyle(fontSize: 10, color: primary,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ),
-                const SizedBox(width: 12),
-                // Cliente
-                Expanded(
-                  child: Row(children: [
-                    CircleAvatar(
-                      radius: 12,
-                      backgroundColor: Colors.teal.withOpacity(0.12),
-                      child: Text(
-                        clienteNome.isNotEmpty && clienteNome != '—' ? clienteNome[0].toUpperCase() : 'C',
-                        style: const TextStyle(fontSize: 10, color: Colors.teal, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Cliente', style: TextStyle(fontSize: 9, color: Colors.grey[400], fontWeight: FontWeight.w500)),
-                        Text(clienteNome,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    )),
-                  ]),
+                const SizedBox(width: 6),
+                Flexible(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Persona', style: TextStyle(
+                        fontSize: 9, color: Colors.grey[400],
+                        fontWeight: FontWeight.w500)),
+                    Text(personaNome,
+                        style: const TextStyle(fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                )),
+              ])),
+              const SizedBox(width: 12),
+              Expanded(child: Row(children: [
+                CircleAvatar(
+                  radius: 12,
+                  backgroundColor: Colors.teal.withOpacity(0.12),
+                  child: Text(
+                    clienteNome.isNotEmpty && clienteNome != '—'
+                        ? clienteNome[0].toUpperCase() : 'C',
+                    style: const TextStyle(fontSize: 10, color: Colors.teal,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ],
-            ),
+                const SizedBox(width: 6),
+                Flexible(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Cliente', style: TextStyle(
+                        fontSize: 9, color: Colors.grey[400],
+                        fontWeight: FontWeight.w500)),
+                    Text(clienteNome,
+                        style: const TextStyle(fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                )),
+              ])),
+            ]),
 
             const SizedBox(height: 10),
 
-            // ── Riga 3: toggle Fatt. + Pag. ──
+            // Riga 3: toggle badge
             Row(children: [
               _toggleBadge(
                 label: 'Fatturato',
@@ -422,8 +521,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ),
             const SizedBox(width: 5),
             Text(label, style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontSize: 12, fontWeight: FontWeight.w600,
               color: active ? activeColor : Colors.grey[400],
             )),
             if (!enabled) ...[
@@ -437,7 +535,8 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   }
 
   // ── METRIC BOX ──────────────────────────────────────────────────────────────
-  Widget _metricBox(String label, String value, Color color, IconData icon, double amount, double total) {
+  Widget _metricBox(String label, String value, Color color, IconData icon,
+      double amount, double total) {
     final pct = (total > 0) ? (amount / total).clamp(0.0, 1.0) : 0.0;
     return Expanded(
       child: Container(
@@ -460,11 +559,13 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               ),
               const SizedBox(width: 6),
               Flexible(child: Text(label, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w500))),
+                  style: TextStyle(fontSize: 10, color: Colors.grey[500],
+                      fontWeight: FontWeight.w500))),
             ]),
             const SizedBox(height: 6),
             Text(value,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
+                    color: color),
                 overflow: TextOverflow.ellipsis),
             const SizedBox(height: 6),
             ClipRRect(
@@ -482,7 +583,8 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     );
   }
 
-  Widget _segBtn(String val, String label, String current, Function(String) onChange, Color primary) {
+  Widget _segBtn(String val, String label, String current,
+      Function(String) onChange, Color primary) {
     final active = current == val;
     return GestureDetector(
       onTap: () => onChange(val),
@@ -491,7 +593,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         decoration: BoxDecoration(
           color: active ? primary.withOpacity(0.12) : Colors.grey[100],
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: active ? primary : Colors.grey.shade300, width: active ? 1.5 : 1.0),
+          border: Border.all(
+              color: active ? primary : Colors.grey.shade300,
+              width: active ? 1.5 : 1.0),
         ),
         child: Text(label, style: TextStyle(
           fontSize: 12,
@@ -502,4 +606,3 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     );
   }
 }
-
