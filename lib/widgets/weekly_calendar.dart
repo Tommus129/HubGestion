@@ -79,7 +79,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   }
 
   Color _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
-  String _uName(String uid) => _userNames[uid] ?? '';
   String _cName(String cid) => _clientNames[cid] ?? '';
 
   Color _rColor(String? id) {
@@ -159,7 +158,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
             Row(children: [
               Container(
                 width: _timeW, height: 56,
-                decoration: BoxDecoration(color: Colors.white),
+                color: Colors.white,
               ),
               ..._days.map((d) {
                 final today = _isToday(d);
@@ -219,10 +218,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             right: 6,
                             child: Text(
                               '${(_start + i).toString().padLeft(2, '0')}:00',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey.shade400,
-                              ),
+                              style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
                             ),
                           ),
                         ),
@@ -243,282 +239,241 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                       return SizedBox(
                         width: dw,
                         height: totalH,
-                        child: Stack(
-                          children: [
+                        // ✅ ClipRect sul giorno intero — nulla esce dalla colonna
+                        child: ClipRect(
+                          child: Stack(
+                            children: [
 
-                            // SFONDO + GRIGLIA
-                            ...List.generate(_end - _start, (i) =>
-                              Positioned(
-                                top: i * _hourH,
-                                left: 0, right: 0,
-                                height: _hourH,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: today
-                                        ? primary.withOpacity(0.02)
-                                        : Colors.white,
-                                    border: Border(
-                                      top: BorderSide(color: Colors.grey.shade200),
-                                      left: BorderSide(color: Colors.grey.shade200),
+                              // SFONDO + GRIGLIA
+                              ...List.generate(_end - _start, (i) =>
+                                Positioned(
+                                  top: i * _hourH, left: 0, right: 0, height: _hourH,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: today ? primary.withOpacity(0.02) : Colors.white,
+                                      border: Border(
+                                        top: BorderSide(color: Colors.grey.shade200),
+                                        left: BorderSide(color: Colors.grey.shade200),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
 
-                            // LINEA MEZZ'ORA
-                            ...List.generate(_end - _start, (i) =>
-                              Positioned(
-                                top: i * _hourH + _hourH / 2,
-                                left: 4, right: 0, height: 1,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
+                              // LINEA MEZZ'ORA
+                              ...List.generate(_end - _start, (i) =>
+                                Positioned(
+                                  top: i * _hourH + _hourH / 2,
+                                  left: 4, right: 0, height: 1,
+                                  child: Container(color: Colors.grey.shade100),
+                                ),
+                              ),
+
+                              // AREA TAP VUOTA
+                              ...List.generate(_end - _start, (i) =>
+                                Positioned(
+                                  top: i * _hourH, left: 0, right: 0, height: _hourH,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onTap: () => widget.onTapSlot(DateTime(
+                                        d.year, d.month, d.day, _start + i)),
+                                    child: SizedBox.expand(),
                                   ),
                                 ),
                               ),
-                            ),
 
-                            // AREA TAP VUOTA
-                            ...List.generate(_end - _start, (i) =>
-                              Positioned(
-                                top: i * _hourH,
-                                left: 0, right: 0, height: _hourH,
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.translucent,
-                                  onTap: () => widget.onTapSlot(DateTime(
-                                      d.year, d.month, d.day, _start + i)),
-                                  child: SizedBox.expand(),
-                                ),
-                              ),
-                            ),
+                              // LINEA ORA CORRENTE
+                              if (today) _buildNowLine(primary),
 
-                            // LINEA ORA CORRENTE
-                            if (today) _buildNowLine(primary),
+                              // ── APPUNTAMENTI ──────────────────────
+                              ...dayApts.map((apt) {
+                                final key = apt.id ?? apt.titolo;
+                                final col = layout[key] ?? _ColLayout(0, 1);
+                                final top = _topOf(apt.oraInizio).clamp(0.0, totalH - 26.0);
+                                final h   = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
+                                final uColor = _uColor(apt.userId);
+                                final rColor = _rColor(apt.roomId);
+                                final room   = _rooms[apt.roomId];
+                                final isMine = apt.userId == me?.uid;
+                                final canSee = isMine || (me?.isAdmin ?? false);
+                                final clienteNome = canSee ? _cName(apt.clientId) : '';
 
-                            // ── APPUNTAMENTI ──────────────────────
-                            ...dayApts.map((apt) {
-                              final key = apt.id ?? apt.titolo;
-                              final col = layout[key] ?? _ColLayout(0, 1);
-                              final top = _topOf(apt.oraInizio).clamp(0.0, totalH - 26.0);
-                              final h   = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
-                              final uColor = _uColor(apt.userId);
-                              final rColor = _rColor(apt.roomId);
-                              final room   = _rooms[apt.roomId];
-                              final isMine = apt.userId == me?.uid;
-                              final canSee = isMine || (me?.isAdmin ?? false);
-                              final clienteNome = canSee ? _cName(apt.clientId) : '';
+                                final padding = 2.0;
+                                final colW = (dw - padding * (col.total + 1)) / col.total;
+                                final leftPos = padding + col.index * (colW + padding);
 
-                              final padding = 2.0;
-                              final colW = (dw - padding * (col.total + 1)) / col.total;
-                              final leftPos = padding + col.index * (colW + padding);
+                                // ✅ Soglie adattive in base al numero di colonne
+                                // Con 3+ colonne affiancate mostriamo solo orario+titolo
+                                final n = col.total;
+                                final sogliaStanza  = n >= 3 ? 999.0 : (n == 2 ? 40.0 : 44.0);
+                                final sogliaCliente = n >= 3 ? 999.0 : (n == 2 ? 56.0 : 60.0);
+                                final sogliaTariffa = n >= 3 ? 999.0 : (n == 2 ? 72.0 : 76.0);
+                                final sogliaBadge   = n >= 3 ? 999.0 : (n == 2 ? 90.0 : 92.0);
 
-                              final sogliaStanza   = col.total > 1 ? 36.0 : 44.0;
-                              final sogliaCliente  = col.total > 1 ? 52.0 : 60.0;
-                              final sogliaTariffa  = col.total > 1 ? 70.0 : 76.0;
-                              final sogliaBadge    = col.total > 1 ? 88.0 : 92.0; // ✅ soglia badge
-
-                              return Positioned(
-                                top: top,
-                                left: leftPos,
-                                width: colW,
-                                height: h,
-                                child: GestureDetector(
-                                  onTap: () => widget.onTapAppointment(apt),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: uColor.withOpacity(0.15),
+                                return Positioned(
+                                  top: top,
+                                  left: leftPos,
+                                  width: colW,
+                                  height: h,
+                                  child: GestureDetector(
+                                    onTap: () => widget.onTapAppointment(apt),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      // ✅ ClipRRect sulla singola card — taglia overflow interno
+                                      child: ClipRRect(
                                         borderRadius: BorderRadius.circular(5),
-                                        border: Border.all(color: uColor, width: 1.5),
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                                        children: [
-
-                                          // BARRA SINISTRA = colore stanza
-                                          Container(
-                                            width: 4,
-                                            decoration: BoxDecoration(
-                                              color: rColor,
-                                              borderRadius: BorderRadius.only(
-                                                topLeft: Radius.circular(4),
-                                                bottomLeft: Radius.circular(4),
-                                              ),
-                                            ),
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: uColor.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(5),
+                                            border: Border.all(color: uColor, width: 1.5),
                                           ),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
 
-                                          // CONTENUTO
-                                          Expanded(
-                                            child: Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                  horizontal: 4, vertical: 3),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-
-                                                  // ── ORARIO
-                                                  Text(
-                                                    '${apt.oraInizio}–${apt.oraFine}',
-                                                    style: TextStyle(
-                                                      fontSize: col.total > 1 ? 10 : 13,
-                                                      color: Colors.black54,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                    overflow: TextOverflow.ellipsis,
+                                              // BARRA SINISTRA stanza
+                                              Container(
+                                                width: 4,
+                                                decoration: BoxDecoration(
+                                                  color: rColor,
+                                                  borderRadius: BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    bottomLeft: Radius.circular(4),
                                                   ),
+                                                ),
+                                              ),
 
-                                                  // ── TITOLO
-                                                  Text(
-                                                    apt.titolo,
-                                                    style: TextStyle(
-                                                      fontSize: col.total > 1 ? 11 : 13,
-                                                      fontWeight: FontWeight.w700,
-                                                      color: Colors.black87,
-                                                      height: 1.2,
-                                                    ),
-                                                    maxLines: col.total > 1 ? 1 : 2,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
+                                              // CONTENUTO — Expanded garantisce che non esca
+                                              Expanded(
+                                                child: Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                      horizontal: 3, vertical: 3),
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
 
-                                                  // ── STANZA (visibile a tutti)
-                                                  if (room != null && h > sogliaStanza)
-                                                    Row(children: [
-                                                      Container(
-                                                        width: 6, height: 6,
-                                                        margin: EdgeInsets.only(right: 3, top: 1),
-                                                        decoration: BoxDecoration(
-                                                          color: rColor,
-                                                          shape: BoxShape.circle,
+                                                      // ORARIO
+                                                      Text(
+                                                        n >= 3
+                                                            ? apt.oraInizio  // solo ora inizio se stretto
+                                                            : '${apt.oraInizio}–${apt.oraFine}',
+                                                        style: TextStyle(
+                                                          fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 11),
+                                                          color: Colors.black54,
+                                                          fontWeight: FontWeight.w500,
                                                         ),
+                                                        overflow: TextOverflow.clip,
+                                                        maxLines: 1,
                                                       ),
-                                                      Expanded(
-                                                        child: Text(
-                                                          room.name,
-                                                          style: TextStyle(
-                                                            fontSize: col.total > 1 ? 10 : 12,
-                                                            color: rColor,
-                                                            fontWeight: FontWeight.w700,
+
+                                                      // TITOLO
+                                                      Text(
+                                                        apt.titolo,
+                                                        style: TextStyle(
+                                                          fontSize: n >= 3 ? 10 : (n == 2 ? 11 : 13),
+                                                          fontWeight: FontWeight.w700,
+                                                          color: Colors.black87,
+                                                          height: 1.2,
+                                                        ),
+                                                        maxLines: n >= 3 ? 1 : (n == 2 ? 1 : 2),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+
+                                                      // STANZA
+                                                      if (room != null && h > sogliaStanza)
+                                                        Row(children: [
+                                                          Container(
+                                                            width: 6, height: 6,
+                                                            margin: EdgeInsets.only(right: 3, top: 1),
+                                                            decoration: BoxDecoration(
+                                                              color: rColor,
+                                                              shape: BoxShape.circle,
+                                                            ),
                                                           ),
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
-                                                      ),
-                                                    ]),
+                                                          Expanded(
+                                                            child: Text(
+                                                              room.name,
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                color: rColor,
+                                                                fontWeight: FontWeight.w700,
+                                                              ),
+                                                              overflow: TextOverflow.ellipsis,
+                                                              maxLines: 1,
+                                                            ),
+                                                          ),
+                                                        ]),
 
-                                                  // ── CLIENTE (solo proprietario/admin)
-                                                  if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
-                                                    Row(children: [
-                                                      Icon(
-                                                        Icons.person,
-                                                        size: col.total > 1 ? 9 : 11,
-                                                        color: Colors.black45,
-                                                      ),
-                                                      SizedBox(width: 2),
-                                                      Expanded(
-                                                        child: Text(
-                                                          clienteNome,
+                                                      // CLIENTE
+                                                      if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
+                                                        Row(children: [
+                                                          Icon(Icons.person, size: 9, color: Colors.black45),
+                                                          SizedBox(width: 2),
+                                                          Expanded(
+                                                            child: Text(
+                                                              clienteNome,
+                                                              style: TextStyle(
+                                                                fontSize: 10,
+                                                                color: Colors.black54,
+                                                                fontWeight: FontWeight.w600,
+                                                              ),
+                                                              overflow: TextOverflow.ellipsis,
+                                                              maxLines: 1,
+                                                            ),
+                                                          ),
+                                                        ]),
+
+                                                      // TARIFFA
+                                                      if (canSee && h > sogliaTariffa)
+                                                        Text(
+                                                          '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
                                                           style: TextStyle(
-                                                            fontSize: col.total > 1 ? 10 : 12,
-                                                            color: Colors.black54,
-                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 9,
+                                                            color: Colors.black38,
+                                                            fontWeight: FontWeight.w500,
                                                           ),
                                                           overflow: TextOverflow.ellipsis,
                                                           maxLines: 1,
                                                         ),
-                                                      ),
-                                                    ]),
 
-                                                  // ── TARIFFA (solo proprietario/admin)
-                                                  if (canSee && h > sogliaTariffa)
-                                                    Text(
-                                                      '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-                                                      style: TextStyle(
-                                                        fontSize: col.total > 1 ? 9 : 11,
-                                                        color: Colors.black38,
-                                                        fontWeight: FontWeight.w500,
-                                                      ),
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-
-                                                  // ── BADGE FATTURATO / PAGATO ✅ NUOVO
-                                                  if (canSee && h > sogliaBadge)
-                                                    Padding(
-                                                      padding: EdgeInsets.only(top: 3),
-                                                      child: Row(
-                                                        children: [
-                                                          // FATTURATO
-                                                          Container(
-                                                            padding: EdgeInsets.symmetric(
-                                                                horizontal: 4, vertical: 1),
-                                                            decoration: BoxDecoration(
-                                                              color: apt.fatturato
-                                                                  ? Colors.orange.withOpacity(0.2)
-                                                                  : Colors.grey.withOpacity(0.15),
-                                                              borderRadius: BorderRadius.circular(3),
-                                                              border: Border.all(
-                                                                color: apt.fatturato
-                                                                    ? Colors.orange
-                                                                    : Colors.grey.shade400,
-                                                                width: 0.8,
+                                                      // ✅ BADGE — con Flexible per non traboccare mai
+                                                      if (canSee && h > sogliaBadge)
+                                                        Padding(
+                                                          padding: EdgeInsets.only(top: 3),
+                                                          child: Row(
+                                                            children: [
+                                                              Flexible(
+                                                                child: _badge(
+                                                                  apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+                                                                  apt.fatturato ? Colors.orange : Colors.grey,
+                                                                ),
                                                               ),
-                                                            ),
-                                                            child: Text(
-                                                              apt.fatturato ? 'Fatt. ✓' : 'Fatt. ✗',
-                                                              style: TextStyle(
-                                                                fontSize: col.total > 1 ? 8 : 9,
-                                                                color: apt.fatturato
-                                                                    ? Colors.orange.shade800
-                                                                    : Colors.grey.shade500,
-                                                                fontWeight: FontWeight.w700,
+                                                              SizedBox(width: 2),
+                                                              Flexible(
+                                                                child: _badge(
+                                                                  apt.pagato ? 'Pag.✓' : 'Pag.✗',
+                                                                  apt.pagato ? Colors.green : Colors.grey,
+                                                                ),
                                                               ),
-                                                            ),
+                                                            ],
                                                           ),
-                                                          SizedBox(width: 3),
-                                                          // PAGATO
-                                                          Container(
-                                                            padding: EdgeInsets.symmetric(
-                                                                horizontal: 4, vertical: 1),
-                                                            decoration: BoxDecoration(
-                                                              color: apt.pagato
-                                                                  ? Colors.green.withOpacity(0.2)
-                                                                  : Colors.grey.withOpacity(0.15),
-                                                              borderRadius: BorderRadius.circular(3),
-                                                              border: Border.all(
-                                                                color: apt.pagato
-                                                                    ? Colors.green
-                                                                    : Colors.grey.shade400,
-                                                                width: 0.8,
-                                                              ),
-                                                            ),
-                                                            child: Text(
-                                                              apt.pagato ? 'Pag. ✓' : 'Pag. ✗',
-                                                              style: TextStyle(
-                                                                fontSize: col.total > 1 ? 8 : 9,
-                                                                color: apt.pagato
-                                                                    ? Colors.green.shade700
-                                                                    : Colors.grey.shade500,
-                                                                fontWeight: FontWeight.w700,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-
-                                                ],
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
-                                            ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }),
-                          ],
+                                );
+                              }),
+                            ],
+                          ),
                         ),
                       );
                     }),
@@ -526,10 +481,31 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                 ),
               ),
             )),
-
           ]);
         });
       },
+    );
+  }
+
+  // ✅ Badge compatto riutilizzabile
+  Widget _badge(String label, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color, width: 0.8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+          color: color == Colors.grey ? Colors.grey.shade500 : color.shade700,
+        ),
+        overflow: TextOverflow.clip,
+        maxLines: 1,
+      ),
     );
   }
 
@@ -546,7 +522,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         ),
         Expanded(child: Container(
           height: 2,
-          decoration: BoxDecoration(color: c.withOpacity(0.5)),
+          color: c.withOpacity(0.5),
         )),
       ]),
     );
@@ -560,7 +536,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   String _dn(int w) => ['LUN','MAR','MER','GIO','VEN','SAB','DOM'][w - 1];
 }
 
-// ── Helper layout colonne ─────────────────────────────────────────
 class _ColLayout {
   final int index;
   final int total;
