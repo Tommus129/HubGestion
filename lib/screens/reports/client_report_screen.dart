@@ -299,50 +299,58 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   }
 
   // ── TABELLA ────────────────────────────────────────────────────────────────
-  Widget _buildTable(Color primary, bool isAdmin) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: MaterialStateProperty.all(primary.withOpacity(0.07)),
-        dataRowMinHeight: 40,
-        dataRowMaxHeight: 52,
-        columnSpacing: 16,
-        columns: [
-          DataColumn(label: Text('Data',    style: TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(label: Text('Titolo',  style: TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(label: Text('Persona', style: TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(label: Text('Ore',     style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
-          DataColumn(label: Text('Tariffa', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
-          DataColumn(label: Text('Totale',  style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
-          DataColumn(label: Text('Fatt.',   style: TextStyle(fontWeight: FontWeight.bold))),
-          DataColumn(label: Text('Pag.',    style: TextStyle(fontWeight: FontWeight.bold))),
-        ],
-        rows: _appointments.map((apt) {
-          final nome = _userNames[apt.userId] ?? apt.userId.substring(0, 8);
-          return DataRow(cells: [
+ Widget _buildTable(Color primary, bool isAdmin) {
+  return SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    child: DataTable(
+      headingRowColor: MaterialStateProperty.all(primary.withOpacity(0.07)),
+      dataRowMinHeight: 40,
+      dataRowMaxHeight: 52,
+      columnSpacing: 16,
+      columns: const [
+        DataColumn(label: Text('Data', style: TextStyle(fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Titolo', style: TextStyle(fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Persona', style: TextStyle(fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Ore', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+        DataColumn(label: Text('Tariffa', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+        DataColumn(label: Text('Totale', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+        DataColumn(label: Text('Fatt.', style: TextStyle(fontWeight: FontWeight.bold))),
+        DataColumn(label: Text('Pag.', style: TextStyle(fontWeight: FontWeight.bold))),
+      ],
+      rows: _appointments.map((apt) {
+        final nome = _userNames[apt.userId] ??
+            (apt.userId.length > 8 ? '\…' : apt.userId);
+
+        return DataRow(
+          cells: [
             DataCell(Text(DateHelpers.formatDateShort(apt.data),
-                style: TextStyle(fontSize: 12))),
-            DataCell(ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: 140),
-              child: Text(apt.titolo,
+                style: const TextStyle(fontSize: 12))),
+            DataCell(
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 140),
+                child: Text(
+                  apt.titolo,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            )),
-            // ✅ Colonna Persona
-            DataCell(Text(nome, style: TextStyle(fontSize: 12))),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            DataCell(Text(nome, style: const TextStyle(fontSize: 12))),
             DataCell(Text(apt.oreTotali.toStringAsFixed(1),
-                style: TextStyle(fontSize: 12))),
-            DataCell(Text('€${apt.tariffa.toStringAsFixed(0)}',
-                style: TextStyle(fontSize: 12))),
+                style: const TextStyle(fontSize: 12))),
+            DataCell(Text('€\',
+                style: const TextStyle(fontSize: 12))),
             DataCell(Text(DateHelpers.formatCurrency(apt.totale),
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
             DataCell(_statusDot(apt.fatturato, Colors.orange)),
             DataCell(_statusDot(apt.pagato, Colors.green)),
-          ]);
-        }).toList(),
-        // ── RIGA TOTALI ────────────────────────────────────────\n      ),
-    );
-  }
+          ],
+        );
+      }).toList(),
+    ),
+  );
+}
+
 
   Widget _statusDot(bool active, Color color) {
     return Icon(
@@ -504,4 +512,5 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     return months[m - 1];
   }
 }
+
 

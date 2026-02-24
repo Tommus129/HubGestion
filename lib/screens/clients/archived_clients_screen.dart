@@ -5,6 +5,8 @@ import '../../services/client_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/app_drawer.dart';
 import 'client_form_screen.dart';
+import 'clients_list_screen.dart';
+
 
 class ArchivedClientsScreen extends StatefulWidget {
   @override
@@ -268,7 +270,7 @@ class _ArchivedClientsScreenState extends State<ArchivedClientsScreen> {
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ClientFormScreen(client: client),
+                              MaterialPageRoute(builder: (_) => ClientsListScreen()),
                             ),
                           ),
                         ),
@@ -281,3 +283,4 @@ class _ArchivedClientsScreenState extends State<ArchivedClientsScreen> {
     );
   }
 }
+
