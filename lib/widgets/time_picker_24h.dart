@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 class TimePicker24h extends StatefulWidget {
   final TimeOfDay initialTime;
@@ -13,8 +12,6 @@ class TimePicker24h extends StatefulWidget {
 }
 
 class _TimePicker24hState extends State<TimePicker24h> {
-  late TextEditingController _hourController;
-  late TextEditingController _minuteController;
   late int _hour;
   late int _minute;
 
@@ -23,32 +20,165 @@ class _TimePicker24hState extends State<TimePicker24h> {
     super.initState();
     _hour = widget.initialTime.hour;
     _minute = widget.initialTime.minute;
-    _hourController = TextEditingController(text: _pad(_hour));
-    _minuteController = TextEditingController(text: _pad(_minute));
   }
 
   @override
-  void didUpdateWidget(TimePicker24h oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialTime != widget.initialTime) {
-      _hour = widget.initialTime.hour;
-      _minute = widget.initialTime.minute;
-      _hourController.text = _pad(_hour);
-      _minuteController.text = _pad(_minute);
+  void didUpdateWidget(TimePicker24h old) {
+    super.didUpdateWidget(old);
+    if (old.initialTime != widget.initialTime) {
+      setState(() {
+        _hour = widget.initialTime.hour;
+        _minute = widget.initialTime.minute;
+      });
     }
   }
 
   String _pad(int v) => v.toString().padLeft(2, '0');
 
-  void _emit() {
-    widget.onChanged(TimeOfDay(hour: _hour, minute: _minute));
+  void _emit() => widget.onChanged(TimeOfDay(hour: _hour, minute: _minute));
+
+  void _showPicker(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    int tmpH = _hour;
+    int tmpM = _minute;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text(widget.label,
+              style: TextStyle(color: primary, fontWeight: FontWeight.bold)),
+          contentPadding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // DISPLAY ORARIO
+                Container(
+                  margin: EdgeInsets.only(bottom: 12),
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: primary.withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${_pad(tmpH)} : ${_pad(tmpM)}',
+                      style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: primary,
+                        letterSpacing: 4,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ORE
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Ora',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                          color: Colors.grey[600])),
+                ),
+                SizedBox(height: 6),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: List.generate(24, (h) {
+                    final sel = tmpH == h;
+                    return GestureDetector(
+                      onTap: () => setS(() => tmpH = h),
+                      child: Container(
+                        width: 40, height: 36,
+                        decoration: BoxDecoration(
+                          color: sel ? primary : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: sel ? primary : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(_pad(h),
+                            style: TextStyle(
+                              color: sel ? Colors.white : Colors.grey[700],
+                              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+
+                SizedBox(height: 14),
+
+                // MINUTI
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Minuti',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                          color: Colors.grey[600])),
+                ),
+                SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+                      .map((m) {
+                    final sel = tmpM == m;
+                    return GestureDetector(
+                      onTap: () => setS(() => tmpM = m),
+                      child: Container(
+                        width: 44, height: 36,
+                        decoration: BoxDecoration(
+                          color: sel ? primary : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: sel ? primary : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(_pad(m),
+                            style: TextStyle(
+                              color: sel ? Colors.white : Colors.grey[700],
+                              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                SizedBox(height: 8),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Annulla', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                setState(() { _hour = tmpH; _minute = tmpM; });
+                _emit();
+                Navigator.pop(context);
+              },
+              child: Text('Conferma'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
-
+    final primary = Theme.of(context).colorScheme.primary;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -56,103 +186,34 @@ class _TimePicker24hState extends State<TimePicker24h> {
             style: TextStyle(fontSize: 12, color: Colors.grey[600],
                 fontWeight: FontWeight.w500)),
         SizedBox(height: 4),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[400]!),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // ORE
-              SizedBox(
-                width: 36,
-                child: TextField(
-                  controller: _hourController,
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
+        InkWell(
+          onTap: () => _showPicker(context),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[400]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.access_time, size: 16, color: primary),
+                SizedBox(width: 6),
+                Text(
+                  '${_pad(_hour)} : ${_pad(_minute)}',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: primary,
+                    letterSpacing: 2,
                   ),
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: primary),
-                  onChanged: (v) {
-                    int? h = int.tryParse(v);
-                    if (h != null && h >= 0 && h <= 23) {
-                      _hour = h;
-                      _emit();
-                    }
-                  },
-                  onTap: () => _hourController.selection = TextSelection(
-                      baseOffset: 0, extentOffset: _hourController.text.length),
                 ),
-              ),
-              Text(':', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,
-                  color: primary)),
-              // MINUTI
-              SizedBox(
-                width: 36,
-                child: TextField(
-                  controller: _minuteController,
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                  ),
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: primary),
-                  onChanged: (v) {
-                    int? m = int.tryParse(v);
-                    if (m != null && m >= 0 && m <= 59) {
-                      _minute = m;
-                      _emit();
-                    }
-                  },
-                  onTap: () => _minuteController.selection = TextSelection(
-                      baseOffset: 0, extentOffset: _minuteController.text.length),
-                ),
-              ),
-              // FRECCE SU/GIU minuti
-              Column(
-                children: [
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _minute = (_minute + 5) % 60;
-                        _minuteController.text = _pad(_minute);
-                      });
-                      _emit();
-                    },
-                    child: Icon(Icons.keyboard_arrow_up, size: 18, color: Colors.grey[500]),
-                  ),
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _minute = (_minute - 5 + 60) % 60;
-                        _minuteController.text = _pad(_minute);
-                      });
-                      _emit();
-                    },
-                    child: Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
     );
-  }
-
-  @override
-  void dispose() {
-    _hourController.dispose();
-    _minuteController.dispose();
-    super.dispose();
   }
 }
