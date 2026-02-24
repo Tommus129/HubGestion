@@ -12,10 +12,18 @@ class WeeklyCalendar extends StatefulWidget {
   final Function(Appointment) onTapAppointment;
   final Function(DateTime) onTapSlot;
 
+  // ✅ Nuovi parametri filtro
+  final String? filterUserId;
+  final String? filterRoomId;
+  final String? filterClientId;
+
   WeeklyCalendar({
     required this.focusedWeek,
     required this.onTapAppointment,
     required this.onTapSlot,
+    this.filterUserId,
+    this.filterRoomId,
+    this.filterClientId,
   });
 
   @override
@@ -71,9 +79,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final m = <String, String>{};
     for (final doc in snap.docs) {
       final d = doc.data();
-      final nome = d['nome']?.toString() ?? '';
-      final cognome = d['cognome']?.toString() ?? '';
-      m[doc.id] = '$nome $cognome'.trim();
+      m[doc.id] = '${d['nome'] ?? ''} ${d['cognome'] ?? ''}'.trim();
     }
     setState(() => _clientNames = m);
   }
@@ -110,9 +116,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       bool added = false;
       for (final cluster in clusters) {
         if (cluster.any((c) => _overlaps(c, apt))) {
-          cluster.add(apt);
-          added = true;
-          break;
+          cluster.add(apt); added = true; break;
         }
       }
       if (!added) clusters.add([apt]);
@@ -137,6 +141,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return int.parse(p[0]) * 60 + int.parse(p[1]);
   }
 
+  // ✅ Applica i filtri combinati agli appuntamenti del giorno
+  List<Appointment> _applyFilters(List<Appointment> apts) {
+    return apts.where((a) {
+      if (widget.filterUserId != null && a.userId != widget.filterUserId) return false;
+      if (widget.filterRoomId != null && a.roomId != widget.filterRoomId) return false;
+      if (widget.filterClientId != null && a.clientId != widget.filterClientId) return false;
+      return true;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalH = (_end - _start) * _hourH;
@@ -147,7 +161,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return StreamBuilder<List<Appointment>>(
       stream: _aptService.getAppointments(_days.first, _days.last),
       builder: (context, snap) {
-        final apts = snap.data ?? [];
+        final allApts = snap.data ?? [];
 
         return LayoutBuilder(builder: (context, constraints) {
           final dw = (constraints.maxWidth - _timeW) / 7;
@@ -156,10 +170,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
             // ── HEADER ──────────────────────────────────────────
             Row(children: [
-              Container(
-                width: _timeW, height: 56,
-                color: Colors.white,
-              ),
+              Container(width: _timeW, height: 56, color: Colors.white),
               ..._days.map((d) {
                 final today = _isToday(d);
                 return Container(
@@ -208,14 +219,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
                     // COLONNA ORE
                     Container(
-                      width: _timeW,
-                      height: totalH,
-                      color: Colors.white,
+                      width: _timeW, height: totalH, color: Colors.white,
                       child: Stack(
                         children: List.generate(_end - _start, (i) =>
                           Positioned(
-                            top: i * _hourH - 8,
-                            right: 6,
+                            top: i * _hourH - 8, right: 6,
                             child: Text(
                               '${(_start + i).toString().padLeft(2, '0')}:00',
                               style: TextStyle(fontSize: 10, color: Colors.grey.shade400),
@@ -228,18 +236,20 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     // COLONNE GIORNI
                     ..._days.map((d) {
                       final today = _isToday(d);
-                      final dayApts = apts.where((a) =>
-                        a.data.year == d.year &&
-                        a.data.month == d.month &&
-                        a.data.day == d.day
-                      ).toList();
+
+                      // ✅ Filtro applicato per questo giorno
+                      final dayApts = _applyFilters(
+                        allApts.where((a) =>
+                          a.data.year == d.year &&
+                          a.data.month == d.month &&
+                          a.data.day == d.day
+                        ).toList(),
+                      );
 
                       final layout = _computeLayout(dayApts);
 
                       return SizedBox(
-                        width: dw,
-                        height: totalH,
-                        // ✅ ClipRect sul giorno intero — nulla esce dalla colonna
+                        width: dw, height: totalH,
                         child: ClipRect(
                           child: Stack(
                             children: [
@@ -285,15 +295,15 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               // LINEA ORA CORRENTE
                               if (today) _buildNowLine(primary),
 
-                              // ── APPUNTAMENTI ──────────────────────
+                              // ── APPUNTAMENTI ──────────────────
                               ...dayApts.map((apt) {
                                 final key = apt.id ?? apt.titolo;
                                 final col = layout[key] ?? _ColLayout(0, 1);
                                 final top = _topOf(apt.oraInizio).clamp(0.0, totalH - 26.0);
-                                final h   = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
+                                final h = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
                                 final uColor = _uColor(apt.userId);
                                 final rColor = _rColor(apt.roomId);
-                                final room   = _rooms[apt.roomId];
+                                final room = _rooms[apt.roomId];
                                 final isMine = apt.userId == me?.uid;
                                 final canSee = isMine || (me?.isAdmin ?? false);
                                 final clienteNome = canSee ? _cName(apt.clientId) : '';
@@ -302,8 +312,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                 final colW = (dw - padding * (col.total + 1)) / col.total;
                                 final leftPos = padding + col.index * (colW + padding);
 
-                                // ✅ Soglie adattive in base al numero di colonne
-                                // Con 3+ colonne affiancate mostriamo solo orario+titolo
                                 final n = col.total;
                                 final sogliaStanza  = n >= 3 ? 999.0 : (n == 2 ? 40.0 : 44.0);
                                 final sogliaCliente = n >= 3 ? 999.0 : (n == 2 ? 56.0 : 60.0);
@@ -311,15 +319,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                 final sogliaBadge   = n >= 3 ? 999.0 : (n == 2 ? 90.0 : 92.0);
 
                                 return Positioned(
-                                  top: top,
-                                  left: leftPos,
-                                  width: colW,
-                                  height: h,
+                                  top: top, left: leftPos, width: colW, height: h,
                                   child: GestureDetector(
                                     onTap: () => widget.onTapAppointment(apt),
                                     child: Material(
                                       color: Colors.transparent,
-                                      // ✅ ClipRRect sulla singola card — taglia overflow interno
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(5),
                                         child: Container(
@@ -331,8 +335,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                           child: Row(
                                             crossAxisAlignment: CrossAxisAlignment.stretch,
                                             children: [
-
-                                              // BARRA SINISTRA stanza
                                               Container(
                                                 width: 4,
                                                 decoration: BoxDecoration(
@@ -343,122 +345,75 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                   ),
                                                 ),
                                               ),
-
-                                              // CONTENUTO — Expanded garantisce che non esca
                                               Expanded(
                                                 child: Padding(
-                                                  padding: EdgeInsets.symmetric(
-                                                      horizontal: 3, vertical: 3),
+                                                  padding: EdgeInsets.symmetric(horizontal: 3, vertical: 3),
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
                                                     mainAxisSize: MainAxisSize.min,
                                                     children: [
-
-                                                      // ORARIO
                                                       Text(
-                                                        n >= 3
-                                                            ? apt.oraInizio  // solo ora inizio se stretto
-                                                            : '${apt.oraInizio}–${apt.oraFine}',
+                                                        n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
                                                         style: TextStyle(
                                                           fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 11),
                                                           color: Colors.black54,
                                                           fontWeight: FontWeight.w500,
                                                         ),
-                                                        overflow: TextOverflow.clip,
-                                                        maxLines: 1,
+                                                        overflow: TextOverflow.clip, maxLines: 1,
                                                       ),
-
-                                                      // TITOLO
                                                       Text(
                                                         apt.titolo,
                                                         style: TextStyle(
                                                           fontSize: n >= 3 ? 10 : (n == 2 ? 11 : 13),
                                                           fontWeight: FontWeight.w700,
-                                                          color: Colors.black87,
-                                                          height: 1.2,
+                                                          color: Colors.black87, height: 1.2,
                                                         ),
                                                         maxLines: n >= 3 ? 1 : (n == 2 ? 1 : 2),
                                                         overflow: TextOverflow.ellipsis,
                                                       ),
-
-                                                      // STANZA
                                                       if (room != null && h > sogliaStanza)
                                                         Row(children: [
                                                           Container(
                                                             width: 6, height: 6,
                                                             margin: EdgeInsets.only(right: 3, top: 1),
-                                                            decoration: BoxDecoration(
-                                                              color: rColor,
-                                                              shape: BoxShape.circle,
-                                                            ),
+                                                            decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
                                                           ),
-                                                          Expanded(
-                                                            child: Text(
-                                                              room.name,
-                                                              style: TextStyle(
-                                                                fontSize: 10,
-                                                                color: rColor,
-                                                                fontWeight: FontWeight.w700,
-                                                              ),
-                                                              overflow: TextOverflow.ellipsis,
-                                                              maxLines: 1,
-                                                            ),
-                                                          ),
+                                                          Expanded(child: Text(
+                                                            room.name,
+                                                            style: TextStyle(fontSize: 10, color: rColor, fontWeight: FontWeight.w700),
+                                                            overflow: TextOverflow.ellipsis, maxLines: 1,
+                                                          )),
                                                         ]),
-
-                                                      // CLIENTE
                                                       if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
                                                         Row(children: [
                                                           Icon(Icons.person, size: 9, color: Colors.black45),
                                                           SizedBox(width: 2),
-                                                          Expanded(
-                                                            child: Text(
-                                                              clienteNome,
-                                                              style: TextStyle(
-                                                                fontSize: 10,
-                                                                color: Colors.black54,
-                                                                fontWeight: FontWeight.w600,
-                                                              ),
-                                                              overflow: TextOverflow.ellipsis,
-                                                              maxLines: 1,
-                                                            ),
-                                                          ),
+                                                          Expanded(child: Text(
+                                                            clienteNome,
+                                                            style: TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w600),
+                                                            overflow: TextOverflow.ellipsis, maxLines: 1,
+                                                          )),
                                                         ]),
-
-                                                      // TARIFFA
                                                       if (canSee && h > sogliaTariffa)
                                                         Text(
                                                           '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-                                                          style: TextStyle(
-                                                            fontSize: 9,
-                                                            color: Colors.black38,
-                                                            fontWeight: FontWeight.w500,
-                                                          ),
-                                                          overflow: TextOverflow.ellipsis,
-                                                          maxLines: 1,
+                                                          style: TextStyle(fontSize: 9, color: Colors.black38, fontWeight: FontWeight.w500),
+                                                          overflow: TextOverflow.ellipsis, maxLines: 1,
                                                         ),
-
-                                                      // ✅ BADGE — con Flexible per non traboccare mai
                                                       if (canSee && h > sogliaBadge)
                                                         Padding(
                                                           padding: EdgeInsets.only(top: 3),
-                                                          child: Row(
-                                                            children: [
-                                                              Flexible(
-                                                                child: _badge(
-                                                                  apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
-                                                                  apt.fatturato ? Colors.orange : Colors.grey,
-                                                                ),
-                                                              ),
-                                                              SizedBox(width: 2),
-                                                              Flexible(
-                                                                child: _badge(
-                                                                  apt.pagato ? 'Pag.✓' : 'Pag.✗',
-                                                                  apt.pagato ? Colors.green : Colors.grey,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
+                                                          child: Row(children: [
+                                                            Flexible(child: _badge(
+                                                              apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+                                                              apt.fatturato ? Colors.orange : Colors.grey,
+                                                            )),
+                                                            SizedBox(width: 2),
+                                                            Flexible(child: _badge(
+                                                              apt.pagato ? 'Pag.✓' : 'Pag.✗',
+                                                              apt.pagato ? Colors.green : Colors.grey,
+                                                            )),
+                                                          ]),
                                                         ),
                                                     ],
                                                   ),
@@ -487,7 +442,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  // ✅ Badge compatto riutilizzabile
   Widget _badge(String label, Color color) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
@@ -499,12 +453,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 8,
-          fontWeight: FontWeight.w700,
+          fontSize: 8, fontWeight: FontWeight.w700,
           color: color == Colors.grey ? Colors.grey.shade500 : color.shade700,
         ),
-        overflow: TextOverflow.clip,
-        maxLines: 1,
+        overflow: TextOverflow.clip, maxLines: 1,
       ),
     );
   }
@@ -516,14 +468,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return Positioned(
       top: top, left: 0, right: 0,
       child: Row(children: [
-        Container(
-          width: 8, height: 8,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        ),
-        Expanded(child: Container(
-          height: 2,
-          color: c.withOpacity(0.5),
-        )),
+        Container(width: 8, height: 8,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        Expanded(child: Container(height: 2, color: c.withOpacity(0.5))),
       ]),
     );
   }
