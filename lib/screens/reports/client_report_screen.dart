@@ -52,41 +52,46 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   }
 
   // ✅ Chiamata ogni volta che cambia QUALSIASI filtro
-  Future<void> _autoSearch() async {
-    if (_selectedClient == null) return;
+ Future<void> _autoSearch() async {
+  if (_selectedClient == null) return;
+  if (_periodoType == 'custom' && (_customFrom == null || _customTo == null)) return;
 
-    // Se custom ma date non impostate, aspetta
-    if (_periodoType == 'custom' && (_customFrom == null || _customTo == null)) return;
+  setState(() { _loading = true; _appointments = []; _allFetched = []; });
 
-    setState(() { _loading = true; _appointments = []; _allFetched = []; });
+  try {
+    // ✅ Query minima assoluta: SOLO clientId, nessun orderBy → nessun indice necessario
+    final snap = await _db
+        .collection('appointments')
+        .where('clientId', isEqualTo: _selectedClient!.id)
+        .get();
 
-    try {
-      // ✅ Query minima: solo clientId (no compound index necessario)
-      final snap = await _db
-          .collection('appointments')
-          .where('clientId', isEqualTo: _selectedClient!.id)
-          .orderBy('data')
-          .get();
+    debugPrint('>>> Trovati ${snap.docs.length} doc');
 
-      debugPrint('>>> Trovati ${snap.docs.length} doc per cliente ${_selectedClient!.fullName}');
+    final all = snap.docs.map((d) {
+      try { return Appointment.fromFirestore(d); }
+      catch (e) { debugPrint('>>> Parse error ${d.id}: $e'); return null; }
+    }).whereType<Appointment>()
+      // Ordina in memoria invece che con orderBy Firestore
+      .toList()..sort((a, b) => a.data.compareTo(b.data));
 
-      final all = snap.docs.map((d) {
-        try { return Appointment.fromFirestore(d); }
-        catch (e) { debugPrint('>>> Parse error ${d.id}: $e'); return null; }
-      }).whereType<Appointment>().toList();
+    setState(() { _allFetched = all; });
+    _applyLocalFilters();
 
-      setState(() { _allFetched = all; });
-      _applyLocalFilters();
-    } catch (e) {
-      debugPrint('>>> ERRORE: $e');
-      setState(() => _loading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
-        );
-      }
+  } catch (e) {
+    debugPrint('>>> ERRORE: $e');
+    setState(() => _loading = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Errore: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
+}
+
 
   // ✅ Tutti i filtri applicati in memoria (periodo, fatturato, pagato)
   void _applyLocalFilters() {
