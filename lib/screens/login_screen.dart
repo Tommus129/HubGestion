@@ -26,6 +26,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Nella login il tema non è ancora caricato (nessun utente loggato),
+    // usiamo teal come colore di fallback solo qui
+    const brandColor = Colors.teal;
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: Center(
@@ -42,21 +46,27 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.business, size: 64, color: Colors.teal),
+                Icon(Icons.business, size: 64, color: brandColor),
                 SizedBox(height: 8),
-                Text('Ufficio App', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-                Text('Accedi al tuo account', style: TextStyle(color: Colors.grey)),
+                Text('StepNet',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                Text('Accedi al tuo account',
+                    style: TextStyle(color: Colors.grey)),
                 SizedBox(height: 32),
+
                 TextFormField(
                   controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   validator: (v) => v!.isEmpty ? 'Inserisci email' : null,
                 ),
                 SizedBox(height: 16),
+
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -64,15 +74,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     labelText: 'Password',
                     prefixIcon: Icon(Icons.lock_outlined),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(_obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   validator: (v) => v!.isEmpty ? 'Inserisci password' : null,
                   onFieldSubmitted: (_) => _login(),
                 ),
                 SizedBox(height: 16),
+
                 if (_errorMessage != null) ...[
                   Container(
                     padding: EdgeInsets.all(12),
@@ -84,28 +99,41 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Row(children: [
                       Icon(Icons.error_outline, color: Colors.red, size: 16),
                       SizedBox(width: 8),
-                      Expanded(child: Text(_errorMessage!, style: TextStyle(color: Colors.red))),
+                      Expanded(
+                          child: Text(_errorMessage!,
+                              style: TextStyle(color: Colors.red))),
                     ]),
                   ),
                   SizedBox(height: 16),
                 ],
+
                 SizedBox(
-                  width: double.infinity, height: 48,
+                  width: double.infinity,
+                  height: 48,
                   child: ElevatedButton(
                     onPressed: _loading ? null : _login,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal, foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      backgroundColor: brandColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
                     child: _loading
-                        ? SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        ? SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
                         : Text('Accedi', style: TextStyle(fontSize: 16)),
                   ),
                 ),
                 SizedBox(height: 16),
+
                 TextButton(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RegisterScreen())),
-                  child: Text('Non hai un account? Registrati', style: TextStyle(color: Colors.teal)),
+                  onPressed: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => RegisterScreen())),
+                  style: TextButton.styleFrom(foregroundColor: brandColor),
+                  child: Text('Non hai un account? Registrati'),
                 ),
               ],
             ),

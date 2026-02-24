@@ -30,12 +30,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   }
 
   Future<void> _loadDetails() async {
-    // Carica cliente
     ClientService().getClients(includeArchived: true).listen((clients) {
       final match = clients.where((c) => c.id == widget.appointment.clientId);
       if (match.isNotEmpty) setState(() => _client = match.first);
     });
-    // Carica stanza
     RoomService().getRooms().listen((rooms) {
       final match = rooms.where((r) => r.id == widget.appointment.roomId);
       if (match.isNotEmpty) setState(() => _room = match.first);
@@ -57,6 +55,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   }
 
   Future<void> _deleteAppointment(BuildContext context) async {
+    final primary = Theme.of(context).colorScheme.primary;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -80,19 +79,18 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     final auth = Provider.of<AuthService>(context);
     final user = auth.currentUser;
     final apt = widget.appointment;
     final canEdit = user?.isAdmin == true || user?.uid == apt.userId;
     final roomColor = _room != null
         ? Color(int.parse('FF${_room!.color.replaceAll("#", "")}', radix: 16))
-        : Colors.teal;
+        : primary;
 
     return Scaffold(
       appBar: AppBar(
         title: Text('Dettaglio'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
         actions: [
           if (canEdit)
             IconButton(
@@ -153,12 +151,15 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               Card(
                 child: ListTile(
                   leading: Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(color: roomColor, borderRadius: BorderRadius.circular(8)),
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                        color: roomColor, borderRadius: BorderRadius.circular(8)),
                     child: Icon(Icons.meeting_room, color: Colors.white, size: 20),
                   ),
                   title: Text('Stanza'),
-                  subtitle: Text(_room!.name, style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(_room!.name,
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             SizedBox(height: 8),
@@ -168,15 +169,16 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               Card(
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: Colors.teal,
+                    backgroundColor: primary,
                     child: Text(_client!.nome[0].toUpperCase(),
                         style: TextStyle(color: Colors.white)),
                   ),
                   title: Text('Cliente'),
                   subtitle: Text(_client!.fullName,
                       style: TextStyle(fontWeight: FontWeight.bold)),
-                  trailing: _client!.telefono != null && _client!.telefono!.isNotEmpty
-                      ? Icon(Icons.phone, color: Colors.teal)
+                  trailing: _client!.telefono != null &&
+                          _client!.telefono!.isNotEmpty
+                      ? Icon(Icons.phone, color: primary)
                       : null,
                 ),
               ),
@@ -196,7 +198,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     _infoRow('Tariffa', '${DateHelpers.formatCurrency(apt.tariffa)}/ora'),
                     Divider(),
                     _infoRow('Totale', DateHelpers.formatCurrency(apt.totale),
-                        bold: true, color: Colors.teal),
+                        bold: true, color: primary),
                   ],
                 ),
               ),
@@ -242,18 +244,20 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     );
   }
 
-  Widget _infoRow(String label, String value, {bool bold = false, Color? color}) {
+  Widget _infoRow(String label, String value,
+      {bool bold = false, Color? color}) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(color: Colors.grey)),
-          Text(value, style: TextStyle(
-            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-            color: color,
-            fontSize: bold ? 16 : 14,
-          )),
+          Text(value,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                color: color,
+                fontSize: bold ? 16 : 14,
+              )),
         ],
       ),
     );
@@ -279,10 +283,11 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           children: [
             Icon(icon, color: active ? activeColor : Colors.grey, size: 28),
             SizedBox(height: 4),
-            Text(label, style: TextStyle(
-              color: active ? activeColor : Colors.grey,
-              fontWeight: active ? FontWeight.bold : FontWeight.normal,
-            )),
+            Text(label,
+                style: TextStyle(
+                  color: active ? activeColor : Colors.grey,
+                  fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                )),
           ],
         ),
       ),
