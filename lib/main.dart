@@ -1,39 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/calendar_screen.dart';
+import 'utils/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AuthService(),
+      child: UfficioApp(),
+    ),
   );
-  runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class UfficioApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthService(),
-      child: MaterialApp(
-        title: 'Ufficio App',
-        theme: ThemeData(primarySwatch: Colors.teal, useMaterial3: true),
-        debugShowCheckedModeBanner: false,
-        home: StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Scaffold(body: Center(child: CircularProgressIndicator()));
-            }
-            return snapshot.hasData ? DashboardScreen() : LoginScreen();
-          },
-        ),
-      ),
+    return Consumer<AuthService>(
+      builder: (context, auth, _) {
+        // Colore tema dinamico dal profilo utente
+        Color primaryColor = Colors.teal;
+        if (auth.currentUser?.personaColor != null) {
+          final hex = auth.currentUser!.personaColor!.replaceAll('#', '');
+          primaryColor = Color(int.parse('FF$hex', radix: 16));
+        }
+
+        return MaterialApp(
+          title: 'StepNet',
+          debugShowCheckedModeBanner: false,
+          theme: buildAppTheme(primaryColor),
+          home: auth.isLoggedIn ? CalendarScreen() : LoginScreen(),
+        );
+      },
     );
   }
 }
