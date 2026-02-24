@@ -52,19 +52,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Future<void> _loadUsers() async {
     final snap = await _db.collection('users').get();
-    final colors = <String, Color>{};
-    final names = <String, String>{};
+    final c = <String, Color>{};
+    final n = <String, String>{};
     for (final doc in snap.docs) {
       final d = doc.data();
-      final hex = (d['personaColor'] ?? '#607D8B').replaceAll('#', '');
-      try {
-        colors[doc.id] = Color(int.parse('FF$hex', radix: 16));
-      } catch (_) {
-        colors[doc.id] = Colors.blueGrey;
-      }
-      names[doc.id] = (d['displayName'] ?? d['email'] ?? '').toString();
+      final hex = d['personaColor']?.toString().replaceAll('#', '') ?? '607D8B';
+      try { c[doc.id] = Color(int.parse('FF$hex', radix: 16)); }
+      catch (_) { c[doc.id] = Colors.blueGrey; }
+      n[doc.id] = d['displayName']?.toString() ?? d['email']?.toString() ?? 'Utente';
     }
-    setState(() { _userColors = colors; _userNames = names; });
+    setState(() { _userColors = c; _userNames = n; });
   }
 
   Color _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
@@ -73,23 +70,24 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   Color _rColor(String? id) {
     if (id == null || !_rooms.containsKey(id)) return Colors.grey;
     try {
-      final hex = _rooms[id]!.color.replaceAll('#', '');
-      return Color(int.parse('FF$hex', radix: 16));
+      return Color(int.parse('FF${_rooms[id]!.color.replaceAll('#','')}', radix: 16));
     } catch (_) { return Colors.grey; }
   }
 
+  // Pixel dall'inizio griglia
   double _topOf(String t) {
     final p = t.split(':');
     if (p.length < 2) return 0;
     return ((int.parse(p[0]) - _start) + int.parse(p[1]) / 60.0) * _hourH;
   }
 
-  double _heightOf(String s, String e) {
+  // Altezza in pixel
+  double _hOf(String s, String e) {
     final sp = s.split(':'); final ep = e.split(':');
     if (sp.length < 2 || ep.length < 2) return _hourH;
     final diff = (int.parse(ep[0]) * 60 + int.parse(ep[1])) -
                  (int.parse(sp[0]) * 60 + int.parse(sp[1]));
-    return (diff / 60.0) * _hourH;
+    return (diff.clamp(15, 900) / 60.0) * _hourH;
   }
 
   @override
@@ -104,186 +102,280 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       builder: (context, snap) {
         final apts = snap.data ?? [];
 
-        return LayoutBuilder(builder: (context, box) {
-          final dw = (box.maxWidth - _timeW) / 7;
+        return LayoutBuilder(builder: (context, constraints) {
+          final dw = (constraints.maxWidth - _timeW) / 7;
 
           return Column(children: [
 
-            // ── HEADER GIORNI ──
-            Container(
-              color: Colors.white,
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-              ),
-              child: Row(children: [
-                SizedBox(width: _timeW),
-                ..._days.map((d) {
-                  final isToday = _isToday(d);
-                  return SizedBox(width: dw, child: Container(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isToday ? primary.withOpacity(0.08) : Colors.white,
-                      border: Border(left: BorderSide(color: Colors.grey[200]!)),
+            // ── HEADER ──────────────────────────────────────────
+            Row(children: [
+              Container(width: _timeW, height: 56,
+                decoration: BoxDecoration(color: Colors.white)),
+              ..._days.map((d) {
+                final today = _isToday(d);
+                return Container(
+                  width: dw, height: 56,
+                  decoration: BoxDecoration(
+                    color: today ? primary.withOpacity(0.07) : Colors.white,
+                    border: Border(
+                      left: BorderSide(color: Colors.grey.shade200),
+                      bottom: BorderSide(color: Colors.grey.shade300),
                     ),
-                    child: Column(children: [
-                      Text(
-                        _dn(d.weekday),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                          color: isToday ? primary : Colors.grey[500],
-                        ),
-                      ),
-                      SizedBox(height: 4),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(_dn(d.weekday), style: TextStyle(
+                        fontSize: 10, letterSpacing: 0.8,
+                        fontWeight: FontWeight.w700,
+                        color: today ? primary : Colors.grey.shade500,
+                      )),
+                      SizedBox(height: 3),
                       Container(
-                        width: 30, height: 30,
+                        width: 28, height: 28,
                         decoration: BoxDecoration(
-                          color: isToday ? primary : Colors.transparent,
+                          color: today ? primary : Colors.transparent,
                           shape: BoxShape.circle,
                         ),
-                        child: Center(child: Text(
-                          '${d.day}',
-                          style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600,
-                            color: isToday ? Colors.white : Colors.black87,
-                          ),
+                        alignment: Alignment.center,
+                        child: Text('${d.day}', style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600,
+                          color: today ? Colors.white : Colors.black87,
                         )),
                       ),
-                    ]),
-                  ));
-                }),
-              ]),
-            ),
+                    ],
+                  ),
+                );
+              }),
+            ]),
 
-            // ── GRIGLIA ──
+            // ── CORPO SCROLLABILE ────────────────────────────────
             Expanded(child: SingleChildScrollView(
-              child: SizedBox(height: totalH, child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: SizedBox(
+                height: totalH,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
-                  // COLONNA ORARI
-                  SizedBox(width: _timeW, child: Stack(
-                    children: List.generate(_end - _start, (i) => Positioned(
-                      top: i * _hourH - 8, right: 6,
-                      child: Text(
-                        '${(_start + i).toString().padLeft(2,'0')}:00',
-                        style: TextStyle(fontSize: 10,
-                            color: Colors.grey[400], fontWeight: FontWeight.w500),
-                      ),
-                    )),
-                  )),
-
-                  // COLONNE GIORNI
-                  ..._days.map((d) {
-                    final dayApts = apts.where((a) =>
-                      a.data.year == d.year &&
-                      a.data.month == d.month &&
-                      a.data.day == d.day
-                    ).toList();
-                    final isToday = _isToday(d);
-
-                    return SizedBox(width: dw, height: totalH,
-                      child: Stack(children: [
-
-                        // CELLE ORE
-                        ...List.generate(_end - _start, (i) => Positioned(
-                          top: i * _hourH, left: 0, right: 0,
-                          child: Column(children: [
-                            Container(
-                              height: _hourH / 2,
-                              decoration: BoxDecoration(
-                                color: isToday
-                                    ? primary.withOpacity(0.02)
-                                    : Colors.white,
-                                border: Border(
-                                  top: BorderSide(color: Colors.grey[200]!),
-                                  left: BorderSide(color: Colors.grey[200]!),
-                                ),
+                    // COLONNA ORE
+                    Container(
+                      width: _timeW,
+                      height: totalH,
+                      color: Colors.white,
+                      child: Stack(
+                        children: List.generate(_end - _start, (i) =>
+                          Positioned(
+                            top: i * _hourH - 8,
+                            right: 6,
+                            child: Text(
+                              '${(_start + i).toString().padLeft(2,'0')}:00',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade400,
                               ),
                             ),
-                            Container(
-                              height: _hourH / 2,
-                              decoration: BoxDecoration(
-                                color: isToday
-                                    ? primary.withOpacity(0.02)
-                                    : Colors.white,
-                                border: Border(
-                                  top: BorderSide(color: Colors.grey[100]!),
-                                  left: BorderSide(color: Colors.grey[200]!),
-                                ),
-                              ),
-                            ),
-                          ]),
-                        )),
-
-                        // SLOT TAP
-                        ...List.generate(_end - _start, (i) => Positioned(
-                          top: i * _hourH, left: 0, right: 0, height: _hourH,
-                          child: GestureDetector(
-                            onTap: () => widget.onTapSlot(
-                                DateTime(d.year, d.month, d.day, _start + i)),
-                            child: Container(color: Colors.transparent),
                           ),
-                        )),
+                        ),
+                      ),
+                    ),
 
-                        // LINEA ORA ATTUALE
-                        if (isToday) _nowLine(primary, totalH),
+                    // COLONNE GIORNI
+                    ..._days.map((d) {
+                      final today = _isToday(d);
+                      final dayApts = apts.where((a) =>
+                        a.data.year == d.year &&
+                        a.data.month == d.month &&
+                        a.data.day == d.day
+                      ).toList();
 
-                        // ── APPUNTAMENTI ──
-                        ...dayApts.map((apt) {
-                          final top = _topOf(apt.oraInizio).clamp(0.0, totalH);
-                          final h = _heightOf(apt.oraInizio, apt.oraFine)
-                              .clamp(24.0, totalH - top);
+                      return SizedBox(
+                        width: dw,
+                        height: totalH,
+                        child: Stack(
+                          children: [
 
-                          final uColor = _uColor(apt.userId);
-                          final rColor = _rColor(apt.roomId);
-                          final room = _rooms[apt.roomId];
-                          final isMine = apt.userId == me?.uid;
-                          final canDetail = isMine || (me?.isAdmin ?? false);
-
-                          return Positioned(
-                            top: top, left: 2, right: 2, height: h,
-                            child: GestureDetector(
-                              onTap: () => widget.onTapAppointment(apt),
-                              child: Container(
-                                clipBehavior: Clip.hardEdge,
-                                decoration: BoxDecoration(
-                                  color: uColor.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border(
-                                    left: BorderSide(color: rColor, width: 4),
-                                    top: BorderSide(color: uColor.withOpacity(0.5), width: 1),
-                                    right: BorderSide(color: uColor.withOpacity(0.5), width: 1),
-                                    bottom: BorderSide(color: uColor.withOpacity(0.5), width: 1),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 2,
-                                      offset: Offset(0, 1),
+                            // SFONDO + GRIGLIA
+                            ...List.generate(_end - _start, (i) =>
+                              Positioned(
+                                top: i * _hourH,
+                                left: 0, right: 0,
+                                height: _hourH,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: today
+                                        ? primary.withOpacity(0.02)
+                                        : Colors.white,
+                                    border: Border(
+                                      top: BorderSide(color: Colors.grey.shade200),
+                                      left: BorderSide(color: Colors.grey.shade200),
                                     ),
-                                  ],
-                                ),
-                                padding: EdgeInsets.only(
-                                    left: 5, top: 3, right: 4, bottom: 2),
-                                child: _aptContent(
-                                  apt: apt,
-                                  h: h,
-                                  uColor: uColor,
-                                  rColor: rColor,
-                                  room: room,
-                                  canDetail: canDetail,
+                                  ),
                                 ),
                               ),
                             ),
-                          );
-                        }),
-                      ]),
-                    );
-                  }),
-                ],
-              )),
+
+                            // LINEA MEZZ'ORA
+                            ...List.generate(_end - _start, (i) =>
+                              Positioned(
+                                top: i * _hourH + _hourH / 2,
+                                left: 4, right: 0, height: 1,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade100,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // AREA TAP VUOTA
+                            ...List.generate(_end - _start, (i) =>
+                              Positioned(
+                                top: i * _hourH,
+                                left: 0, right: 0, height: _hourH,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onTap: () => widget.onTapSlot(DateTime(
+                                      d.year, d.month, d.day, _start + i)),
+                                  child: SizedBox.expand(),
+                                ),
+                              ),
+                            ),
+
+                            // LINEA ORA CORRENTE
+                            if (today) _buildNowLine(primary),
+
+                            // ── APPUNTAMENTI ──────────────────────
+                            ...dayApts.map((apt) {
+                              final top = _topOf(apt.oraInizio).clamp(0.0, totalH - 26.0);
+                              final h   = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
+                              final uColor = _uColor(apt.userId);
+                              final rColor = _rColor(apt.roomId);
+                              final room   = _rooms[apt.roomId];
+                              final isMine = apt.userId == me?.uid;
+                              final canSee = isMine || (me?.isAdmin ?? false);
+
+                              return Positioned(
+                                top: top,
+                                left: 3,
+                                right: 3,
+                                height: h,
+                                child: GestureDetector(
+                                  onTap: () => widget.onTapAppointment(apt),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        // Sfondo tenue del colore utente
+                                        color: uColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(5),
+                                        border: Border.all(
+                                          color: uColor,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          // BARRA SINISTRA = colore stanza
+                                          Container(
+                                            width: 5,
+                                            decoration: BoxDecoration(
+                                              color: rColor,
+                                              borderRadius: BorderRadius.only(
+                                                topLeft: Radius.circular(4),
+                                                bottomLeft: Radius.circular(4),
+                                              ),
+                                            ),
+                                          ),
+                                          // CONTENUTO
+                                          Expanded(
+                                            child: Padding(
+                                              padding: EdgeInsets.symmetric(
+                                                  horizontal: 5, vertical: 3),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  // ORARIO
+                                                  Text(
+                                                    '${apt.oraInizio} – ${apt.oraFine}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.black54,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  // TITOLO
+                                                  Text(
+                                                    apt.titolo,
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: Colors.black87,
+                                                      height: 1.2,
+                                                    ),
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                  // STANZA
+                                                  if (room != null && h > 46)
+                                                    Row(children: [
+                                                      Container(
+                                                        width: 7, height: 7,
+                                                        margin: EdgeInsets.only(right: 3),
+                                                        decoration: BoxDecoration(
+                                                          color: rColor,
+                                                          shape: BoxShape.circle,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        room.name,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: rColor,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ]),
+                                                  // UTENTE
+                                                  if (canSee && h > 62 && _uName(apt.userId).isNotEmpty)
+                                                    Text(
+                                                      _uName(apt.userId),
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: uColor,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  // TARIFFA
+                                                  if (canSee && h > 76)
+                                                    Text(
+                                                      '€${apt.tariffa.toStringAsFixed(0)}/h  ·  €${apt.totale.toStringAsFixed(0)} tot',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.black45,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
             )),
           ]);
         });
@@ -291,115 +383,19 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  Widget _aptContent({
-    required Appointment apt,
-    required double h,
-    required Color uColor,
-    required Color rColor,
-    required Room? room,
-    required bool canDetail,
-  }) {
-    return DefaultTextStyle(
-      style: TextStyle(color: Colors.black87),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-
-          // ORARIO
-          Text(
-            '${apt.oraInizio} – ${apt.oraFine}',
-            style: TextStyle(
-              fontSize: 9,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-
-          // TITOLO - sempre visibile
-          Text(
-            apt.titolo,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-            ),
-            maxLines: h > 50 ? 2 : 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-
-          // STANZA - sempre visibile
-          if (room != null && h > 34)
-            Row(children: [
-              Container(
-                width: 8, height: 8,
-                margin: EdgeInsets.only(right: 3),
-                decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
-              ),
-              Expanded(child: Text(
-                room.name,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: rColor,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )),
-            ]),
-
-          // UTENTE (solo admin/creatore)
-          if (canDetail && h > 52 && _uName(apt.userId).isNotEmpty)
-            Text(
-              _uName(apt.userId),
-              style: TextStyle(
-                fontSize: 9,
-                color: uColor,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-
-          // TARIFFA
-          if (canDetail && h > 68)
-            Text(
-              '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-              style: TextStyle(fontSize: 9, color: Colors.grey[600]),
-            ),
-
-          // BADGE
-          if (h > 84)
-            Row(children: [
-              if (apt.fatturato) _badge('FAT', Colors.orange),
-              if (apt.pagato) _badge('PAG', Colors.green),
-            ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _badge(String txt, Color c) => Container(
-    margin: EdgeInsets.only(right: 3, top: 2),
-    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-    decoration: BoxDecoration(
-      color: c.withOpacity(0.15),
-      borderRadius: BorderRadius.circular(3),
-      border: Border.all(color: c.withOpacity(0.5)),
-    ),
-    child: Text(txt, style: TextStyle(
-        fontSize: 8, color: c, fontWeight: FontWeight.bold)),
-  );
-
-  Widget _nowLine(Color c, double totalH) {
+  Widget _buildNowLine(Color c) {
     final n = DateTime.now();
     if (n.hour < _start || n.hour >= _end) return SizedBox.shrink();
     final top = ((n.hour - _start) + n.minute / 60.0) * _hourH;
     return Positioned(
       top: top, left: 0, right: 0,
       child: Row(children: [
-        Container(width: 8, height: 8,
-            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-        Expanded(child: Container(height: 2, color: c.withOpacity(0.5))),
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+        ),
+        Expanded(child: Container(height: 2,
+            decoration: BoxDecoration(color: c.withOpacity(0.5)))),
       ]),
     );
   }
@@ -409,6 +405,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return d.year == n.year && d.month == n.month && d.day == n.day;
   }
 
-  String _dn(int w) =>
-      ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'][w - 1];
+  String _dn(int w) => ['LUN','MAR','MER','GIO','VEN','SAB','DOM'][w - 1];
 }
+
