@@ -9,6 +9,7 @@ class AuthService extends ChangeNotifier {
   UfficioUser? _ufficioUser;
 
   UfficioUser? get currentUser => _ufficioUser;
+  User? get firebaseUser => _auth.currentUser;
   bool get isLoggedIn => _auth.currentUser != null;
 
   AuthService() {
@@ -28,7 +29,12 @@ class AuthService extends ChangeNotifier {
       if (doc.exists) {
         _ufficioUser = UfficioUser.fromFirestore(doc.data()!, uid);
       } else {
-        _ufficioUser = UfficioUser(uid: uid, email: _auth.currentUser!.email!, displayName: _auth.currentUser!.displayName ?? '', role: 'employee');
+        _ufficioUser = UfficioUser(
+          uid: uid,
+          email: _auth.currentUser!.email!,
+          displayName: _auth.currentUser!.displayName ?? '',
+          role: 'employee',
+        );
         await _firestore.collection('users').doc(uid).set(_ufficioUser!.toFirestore());
       }
     } catch (e) {
@@ -53,7 +59,8 @@ class AuthService extends ChangeNotifier {
 
   Future<String?> register(String email, String password, String displayName) async {
     try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(email: email.trim(), password: password);
+      UserCredential result = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(), password: password);
       await result.user?.updateDisplayName(displayName);
       return null;
     } on FirebaseAuthException catch (e) {
