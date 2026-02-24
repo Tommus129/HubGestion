@@ -120,22 +120,22 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       appBar: AppBar(title: const Text('Report Cliente')),
       drawer: AppDrawer(),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // ── FILTRI (scrollabile verticalmente, fisso in cima) ──
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          // ── PANNELLO FILTRI ──────────────────────────────────────
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // CLIENTE
+                // Riga 1: cliente
                 DropdownButtonFormField<Client>(
                   value: _selectedClient,
                   decoration: InputDecoration(
                     labelText: 'Cliente',
-                    prefixIcon: const Icon(Icons.person, size: 18),
+                    prefixIcon: const Icon(Icons.person_outline, size: 18),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     isDense: true,
@@ -149,113 +149,132 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // PERIODO + MESE/ANNO
-                Row(children: [
-                  ...[
+                // Riga 2: periodo chips + selettori (wrappati)
+                Wrap(
+                  spacing: 6, runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
                     _periodoChip('mese',   'Mese',   primary),
-                    const SizedBox(width: 6),
                     _periodoChip('anno',   'Anno',   primary),
-                    const SizedBox(width: 6),
                     _periodoChip('sempre', 'Sempre', primary),
-                    const SizedBox(width: 6),
                     _periodoChip('custom', 'Custom', primary),
-                  ],
-                  if (_periodoType == 'mese') ...[
-                    const SizedBox(width: 12),
-                    Expanded(child: DropdownButtonFormField<int>(
-                      value: _selectedMonth,
-                      isDense: true,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+
+                    if (_periodoType == 'mese') ...[
+                      SizedBox(
+                        width: 130,
+                        child: DropdownButtonFormField<int>(
+                          value: _selectedMonth,
+                          isDense: true,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          ),
+                          items: List.generate(12, (i) => DropdownMenuItem(
+                              value: i + 1, child: Text(_monthName(i + 1), overflow: TextOverflow.ellipsis))),
+                          onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
+                        ),
                       ),
-                      items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(_monthName(i + 1)))),
-                      onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
-                    )),
-                    const SizedBox(width: 8),
-                    SizedBox(width: 90, child: DropdownButtonFormField<int>(
-                      value: _selectedYear,
-                      isDense: true,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      SizedBox(
+                        width: 80,
+                        child: DropdownButtonFormField<int>(
+                          value: _selectedYear,
+                          isDense: true,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          ),
+                          items: List.generate(8, (i) => DropdownMenuItem(
+                              value: 2024 + i, child: Text('${2024 + i}'))),
+                          onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
+                        ),
                       ),
-                      items: List.generate(8, (i) => DropdownMenuItem(value: 2024 + i, child: Text('${2024 + i}'))),
-                      onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
-                    )),
-                  ],
-                  if (_periodoType == 'anno') ...[
-                    const SizedBox(width: 12),
-                    SizedBox(width: 100, child: DropdownButtonFormField<int>(
-                      value: _selectedYear,
-                      isDense: true,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ],
+
+                    if (_periodoType == 'anno')
+                      SizedBox(
+                        width: 90,
+                        child: DropdownButtonFormField<int>(
+                          value: _selectedYear,
+                          isDense: true,
+                          decoration: InputDecoration(
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          ),
+                          items: List.generate(8, (i) => DropdownMenuItem(
+                              value: 2024 + i, child: Text('${2024 + i}'))),
+                          onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
+                        ),
                       ),
-                      items: List.generate(8, (i) => DropdownMenuItem(value: 2024 + i, child: Text('${2024 + i}'))),
-                      onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
-                    )),
+
+                    if (_periodoType == 'custom') ...[
+                      _datePicker('Dal', _customFrom, (d) { setState(() => _customFrom = d); _applyLocalFilters(); }, primary),
+                      _datePicker('Al',  _customTo,   (d) { setState(() => _customTo   = d); _applyLocalFilters(); }, primary),
+                    ],
                   ],
-                  if (_periodoType == 'custom') ...[
-                    const SizedBox(width: 8),
-                    Expanded(child: _datePicker('Dal', _customFrom, (d) { setState(() => _customFrom = d); _applyLocalFilters(); }, primary)),
-                    const SizedBox(width: 8),
-                    Expanded(child: _datePicker('Al',  _customTo,   (d) { setState(() => _customTo   = d); _applyLocalFilters(); }, primary)),
-                  ],
-                ]),
+                ),
                 const SizedBox(height: 8),
 
-                // FATTURATO + PAGATO
-                Row(children: [
-                  Text('Fatt.', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                  const SizedBox(width: 6),
-                  _statoSegmented(value: _filtroFatturato, onChange: (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary: primary),
-                  const SizedBox(width: 16),
-                  Text('Pag.', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                  const SizedBox(width: 6),
-                  _statoSegmented(value: _filtroPageto, onChange: (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary: primary),
-                ]),
+                // Riga 3: filtri stato
+                Wrap(
+                  spacing: 6, runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text('Fatturato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    _segBtn('tutti', 'Tutti', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
+                    _segBtn('si', 'Sì', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
+                    _segBtn('no', 'No', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
+                    const SizedBox(width: 8),
+                    Text('Pagato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    _segBtn('tutti', 'Tutti', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
+                    _segBtn('si', 'Sì', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
+                    _segBtn('no', 'No', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
+                  ],
+                ),
               ],
             ),
           ),
 
-          // ── METRIC BAR COMPATTA ────────────────────────────────
+          Divider(height: 1, color: Colors.grey.shade200),
+
+          // ── METRIC CARDS 4 box colorati ──────────────────────────
           if (!_loading && _appointments.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _miniMetric('Ore', '${_totOre.toStringAsFixed(1)}h', primary),
-                  _divider(),
-                  _miniMetric('Totale', DateHelpers.formatCurrency(_totGuadagno), Colors.blueGrey),
-                  _divider(),
-                  _miniMetric('Incassato', DateHelpers.formatCurrency(_totPagato), Colors.green),
-                  _divider(),
-                  _miniMetric('Non fatt.', DateHelpers.formatCurrency(_totNonFatt), Colors.red),
+                  _metricBox('Ore totali', '${_totOre.toStringAsFixed(1)}h',
+                      Icons.schedule, primary, _totPagato, _totGuadagno),
+                  const SizedBox(width: 8),
+                  _metricBox('Totale', DateHelpers.formatCurrency(_totGuadagno),
+                      Icons.euro_rounded, Colors.blueGrey, _totGuadagno, _totGuadagno),
+                  const SizedBox(width: 8),
+                  _metricBox('Incassato', DateHelpers.formatCurrency(_totPagato),
+                      Icons.check_circle_outline, Colors.green, _totPagato, _totGuadagno),
+                  const SizedBox(width: 8),
+                  _metricBox('Non fatt.', DateHelpers.formatCurrency(_totNonFatt),
+                      Icons.receipt_long_outlined, Colors.deepOrange, _totNonFatt, _totGuadagno),
                 ],
               ),
             ),
 
-          // ── HEADER TABELLA ─────────────────────────────────────
+          // ── HEADER TABELLA ─────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('${_appointments.length} appuntamenti',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold,
-                          color: primary, letterSpacing: 0.4)),
+                  RichText(text: TextSpan(
+                    style: DefaultTextStyle.of(context).style,
+                    children: [
+                      TextSpan(text: '${_appointments.length}',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primary)),
+                      TextSpan(text: '  appuntamenti',
+                          style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+                    ],
+                  )),
                   Row(children: [
-                    Icon(Icons.touch_app, size: 12, color: Colors.grey[400]),
+                    Icon(Icons.touch_app, size: 13, color: Colors.grey[400]),
                     const SizedBox(width: 3),
                     Text('Tocca Fatt./Pag. per aggiornare',
                         style: TextStyle(fontSize: 11, color: Colors.grey[400])),
@@ -264,7 +283,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ),
             ),
 
-          // ── TABELLA ESPANSA ────────────────────────────────────
+          // ── STATI VUOTI ────────────────────────────────────────────
           if (_loading)
             const Expanded(child: Center(child: CircularProgressIndicator())),
 
@@ -272,20 +291,11 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             Expanded(child: Center(child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.person_search, size: 56, color: Colors.grey[300]),
-                const SizedBox(height: 10),
-                Text('Seleziona un cliente', style: TextStyle(color: Colors.grey[400], fontSize: 15)),
-              ],
-            ))),
-
-          if (!_loading && _selectedClient != null && _appointments.isEmpty && _allFetched.isNotEmpty)
-            Expanded(child: Center(child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.filter_alt_off, size: 48, color: Colors.grey[300]),
-                const SizedBox(height: 8),
-                const Text('Nessun risultato con questi filtri',
-                    style: TextStyle(color: Colors.grey)),
+                Icon(Icons.person_search, size: 64, color: Colors.grey[200]),
+                const SizedBox(height: 12),
+                Text('Seleziona un cliente', style: TextStyle(color: Colors.grey[400], fontSize: 16)),
+                const SizedBox(height: 4),
+                Text('per visualizzare il report', style: TextStyle(color: Colors.grey[300], fontSize: 13)),
               ],
             ))),
 
@@ -293,162 +303,248 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             Expanded(child: Center(child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
-                const SizedBox(height: 8),
-                Text('Nessun appuntamento per ${_selectedClient!.fullName}',
-                    style: const TextStyle(color: Colors.grey)),
+                Icon(Icons.search_off, size: 56, color: Colors.grey[200]),
+                const SizedBox(height: 10),
+                Text('Nessun appuntamento trovato', style: TextStyle(color: Colors.grey[400])),
               ],
             ))),
 
+          if (!_loading && _selectedClient != null && _appointments.isEmpty && _allFetched.isNotEmpty)
+            Expanded(child: Center(child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.filter_alt_off, size: 56, color: Colors.grey[200]),
+                const SizedBox(height: 10),
+                Text('Nessun risultato con questi filtri', style: TextStyle(color: Colors.grey[400])),
+              ],
+            ))),
+
+          // ── TABELLA FULL ───────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
-            Expanded(
-              child: _buildTable(primary, isAdmin),
-            ),
+            Expanded(child: _buildTable(primary, isAdmin)),
         ],
       ),
     );
   }
 
-  // ── TABELLA FULL WIDTH ─────────────────────────────────────────────────────
+  // ── METRIC BOX con progress bar ────────────────────────────────────────────
+  Widget _metricBox(String label, String value, IconData icon, Color color, double amount, double total) {
+    final pct = (total > 0 && amount >= 0) ? (amount / total).clamp(0.0, 1.0) : 0.0;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6)),
+                child: Icon(icon, size: 15, color: color),
+              ),
+              const SizedBox(width: 6),
+              Flexible(child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500], fontWeight: FontWeight.w500))),
+            ]),
+            const SizedBox(height: 6),
+            Text(value,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color),
+                overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: pct,
+                backgroundColor: color.withOpacity(0.12),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── TABELLA ────────────────────────────────────────────────────────────────
   Widget _buildTable(Color primary, bool isAdmin) {
     return LayoutBuilder(builder: (context, constraints) {
       return SingleChildScrollView(
-        scrollDirection: Axis.vertical,
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: ConstrainedBox(
             constraints: BoxConstraints(minWidth: constraints.maxWidth),
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(primary.withOpacity(0.08)),
-              dataRowColor: MaterialStateProperty.resolveWith((states) {
-                // Righe zebrate
-                return null;
-              }),
-              headingRowHeight: 40,
-              dataRowMinHeight: 44,
-              dataRowMaxHeight: 52,
-              columnSpacing: 20,
+              headingRowColor: MaterialStateProperty.all(primary.withOpacity(0.06)),
+              headingRowHeight: 38,
+              dataRowMinHeight: 46,
+              dataRowMaxHeight: 54,
+              columnSpacing: 24,
               horizontalMargin: 16,
               dividerThickness: 0.5,
               columns: const [
-                DataColumn(label: Text('Data',    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                DataColumn(label: Text('Titolo',  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                DataColumn(label: Text('Persona', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                DataColumn(label: Text('Ore',     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)), numeric: true),
-                DataColumn(label: Text('Tariffa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)), numeric: true),
-                DataColumn(label: Text('Totale',  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)), numeric: true),
-                DataColumn(label: Text('Fatt.',   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                DataColumn(label: Text('Pag.',    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                DataColumn(label: Text('Data',    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                DataColumn(label: Text('Titolo',  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                DataColumn(label: Text('Persona', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                DataColumn(label: Text('Ore',     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), numeric: true),
+                DataColumn(label: Text('Tariffa', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), numeric: true),
+                DataColumn(label: Text('Totale',  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)), numeric: true),
+                DataColumn(label: Text('Fatt.',   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
+                DataColumn(label: Text('Pag.',    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12))),
               ],
               rows: _appointments.asMap().entries.map((entry) {
                 final idx = entry.key;
                 final apt = entry.value;
                 final uid  = apt.userId;
                 final nome = _userNames[uid] ?? (uid.length > 8 ? uid.substring(0, 8) : uid);
-                final rowBg = idx.isOdd ? Colors.grey[50]! : Colors.white;
+                final rowBg = idx.isOdd ? const Color(0xFFF9FAFB) : Colors.white;
 
                 return DataRow(
                   color: MaterialStateProperty.all(rowBg),
                   cells: [
-                    DataCell(Text(DateHelpers.formatDateShort(apt.data),
-                        style: const TextStyle(fontSize: 13))),
-                    DataCell(
-                      SizedBox(
-                        width: 180,
-                        child: Text(apt.titolo, overflow: TextOverflow.ellipsis,
+
+                    // Data
+                    DataCell(Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(DateHelpers.formatDateShort(apt.data),
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    DataCell(
-                      Row(children: [
+                        Text('${apt.oraInizio}–${apt.oraFine}',
+                            style: TextStyle(fontSize: 10, color: Colors.grey[400])),
+                      ],
+                    )),
+
+                    // Titolo
+                    DataCell(SizedBox(
+                      width: 160,
+                      child: Text(apt.titolo, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    )),
+
+                    // Persona
+                    DataCell(Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         CircleAvatar(
-                          radius: 12,
-                          backgroundColor: primary.withOpacity(0.15),
-                          child: Text(
-                            nome.isNotEmpty ? nome[0].toUpperCase() : 'U',
-                            style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.bold),
-                          ),
+                          radius: 13,
+                          backgroundColor: primary.withOpacity(0.12),
+                          child: Text(nome.isNotEmpty ? nome[0].toUpperCase() : 'U',
+                              style: TextStyle(fontSize: 11, color: primary, fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 6),
-                        Text(nome, style: const TextStyle(fontSize: 13)),
-                      ]),
-                    ),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 100),
+                          child: Text(nome, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13)),
+                        ),
+                      ],
+                    )),
+
+                    // Ore
                     DataCell(Text(apt.oreTotali.toStringAsFixed(1),
                         style: const TextStyle(fontSize: 13))),
+
+                    // Tariffa
                     DataCell(Text('${apt.tariffa.toStringAsFixed(0)}€/h',
-                        style: TextStyle(fontSize: 13, color: Colors.grey[600]))),
-                    DataCell(Text(DateHelpers.formatCurrency(apt.totale),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[500]))),
 
-                    // FATTURATO toggle
-                    DataCell(
-                      Tooltip(
-                        message: isAdmin
-                            ? (apt.fatturato ? 'Annulla fatturazione' : 'Segna fatturato')
-                            : 'Solo admin',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: isAdmin ? () async {
-                            await _db.collection('appointments').doc(apt.id)
-                                .update({'fatturato': !apt.fatturato});
-                            _autoSearch();
-                          } : null,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: apt.fatturato ? Colors.orange.withOpacity(0.12) : Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: apt.fatturato ? Colors.orange : Colors.grey.shade300,
-                                width: apt.fatturato ? 1.5 : 1.0,
-                              ),
-                            ),
-                            child: Text(
-                              apt.fatturato ? '✓ Fatt.' : '○ Fatt.',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: apt.fatturato ? Colors.orange[800] : Colors.grey[400],
-                              ),
+                    // Totale
+                    DataCell(Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.blueGrey.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(DateHelpers.formatCurrency(apt.totale),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    )),
+
+                    // Fatturato
+                    DataCell(Tooltip(
+                      message: isAdmin
+                          ? (apt.fatturato ? 'Annulla fatturazione' : 'Segna fatturato')
+                          : 'Solo admin',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: isAdmin ? () async {
+                          await _db.collection('appointments').doc(apt.id)
+                              .update({'fatturato': !apt.fatturato});
+                          _autoSearch();
+                        } : null,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: apt.fatturato ? Colors.orange.withOpacity(0.12) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: apt.fatturato ? Colors.orange : Colors.grey.shade300,
+                              width: apt.fatturato ? 1.5 : 1.0,
                             ),
                           ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(
+                              apt.fatturato ? Icons.check : Icons.circle_outlined,
+                              size: 12,
+                              color: apt.fatturato ? Colors.orange[700] : Colors.grey[400],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(apt.fatturato ? 'Sì' : 'No',
+                                style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600,
+                                  color: apt.fatturato ? Colors.orange[700] : Colors.grey[400],
+                                )),
+                          ]),
                         ),
                       ),
-                    ),
+                    )),
 
-                    // PAGATO toggle
-                    DataCell(
-                      Tooltip(
-                        message: apt.pagato ? 'Annulla pagamento' : 'Segna pagato',
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: () async {
-                            await _db.collection('appointments').doc(apt.id)
-                                .update({'pagato': !apt.pagato});
-                            _autoSearch();
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: apt.pagato ? Colors.green.withOpacity(0.12) : Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: apt.pagato ? Colors.green : Colors.grey.shade300,
-                                width: apt.pagato ? 1.5 : 1.0,
-                              ),
-                            ),
-                            child: Text(
-                              apt.pagato ? '✓ Pag.' : '○ Pag.',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: apt.pagato ? Colors.green[800] : Colors.grey[400],
-                              ),
+                    // Pagato
+                    DataCell(Tooltip(
+                      message: apt.pagato ? 'Annulla pagamento' : 'Segna pagato',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () async {
+                          await _db.collection('appointments').doc(apt.id)
+                              .update({'pagato': !apt.pagato});
+                          _autoSearch();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: apt.pagato ? Colors.green.withOpacity(0.12) : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: apt.pagato ? Colors.green : Colors.grey.shade300,
+                              width: apt.pagato ? 1.5 : 1.0,
                             ),
                           ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(
+                              apt.pagato ? Icons.check : Icons.circle_outlined,
+                              size: 12,
+                              color: apt.pagato ? Colors.green[700] : Colors.grey[400],
+                            ),
+                            const SizedBox(width: 4),
+                            Text(apt.pagato ? 'Sì' : 'No',
+                                style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600,
+                                  color: apt.pagato ? Colors.green[700] : Colors.grey[400],
+                                )),
+                          ]),
                         ),
                       ),
-                    ),
+                    )),
                   ],
                 );
               }).toList(),
@@ -459,21 +555,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     });
   }
 
-  // ── MINI METRIC ────────────────────────────────────────────────────────────
-  Widget _miniMetric(String label, String value, Color color) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500], fontWeight: FontWeight.w500)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
-      ],
-    );
-  }
-
-  Widget _divider() => Container(width: 1, height: 28, color: Colors.grey[200]);
-
-  // ── HELPERS ────────────────────────────────────────────────────────────────
   Widget _periodoChip(String value, String label, Color primary) {
     final active = _periodoType == value;
     return GestureDetector(
@@ -495,16 +576,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     );
   }
 
-  Widget _statoSegmented({required String value, required Function(String) onChange, required Color primary}) {
-    return Row(children: [
-      _segBtn('tutti', 'Tutti', value, onChange, primary),
-      const SizedBox(width: 4),
-      _segBtn('si', 'Si', value, onChange, primary),
-      const SizedBox(width: 4),
-      _segBtn('no', 'No', value, onChange, primary),
-    ]);
-  }
-
   Widget _segBtn(String val, String label, String current, Function(String) onChange, Color primary) {
     final active = current == val;
     return GestureDetector(
@@ -517,8 +588,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           border: Border.all(color: active ? primary : Colors.grey.shade300, width: active ? 1.5 : 1.0),
         ),
         child: Text(label, style: TextStyle(
-          fontSize: 12,
-          color: active ? primary : Colors.grey[700],
+          fontSize: 12, color: active ? primary : Colors.grey[600],
           fontWeight: active ? FontWeight.bold : FontWeight.normal,
         )),
       ),
@@ -537,18 +607,18 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: value != null ? primary.withOpacity(0.05) : Colors.grey[50],
           border: Border.all(color: value != null ? primary.withOpacity(0.4) : Colors.grey.shade300),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(children: [
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.calendar_today, size: 13, color: value != null ? primary : Colors.grey),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Text(
             value != null
-                ? '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}'
+                ? '${value.day.toString().padLeft(2,'0')}/${value.month.toString().padLeft(2,'0')}/${value.year}'
                 : label,
             style: TextStyle(fontSize: 12,
                 color: value != null ? Colors.black87 : Colors.grey,
