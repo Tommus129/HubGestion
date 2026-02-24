@@ -27,9 +27,11 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   final RoomService _roomService = RoomService();
   final ClientService _clientService = ClientService();
 
+  late DateTime _selectedDay;
+
   TimeOfDay _oraInizio = TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _oraFine = TimeOfDay(hour: 10, minute: 0);
-  int _durataMinuti = 60; // durata in minuti
+  int _durataMinuti = 60;
   Room? _selectedRoom;
   Client? _selectedClient;
   bool _loading = false;
@@ -43,6 +45,9 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedDay = widget.appointment != null
+        ? widget.appointment!.data
+        : widget.selectedDay;
     _loadData();
     if (isEditing) _prefillForm();
   }
@@ -78,7 +83,16 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     }));
   }
 
-  // Quando cambio inizio → ricalcola fine mantenendo durata
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDay,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) setState(() => _selectedDay = picked);
+  }
+
   void _onInizioChanged(TimeOfDay t) {
     setState(() {
       _oraInizio = t;
@@ -87,17 +101,17 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     });
   }
 
-  // Quando cambio fine → ricalcola durata
   void _onFineChanged(TimeOfDay t) {
     setState(() {
       _oraFine = t;
-      final diff = (t.hour * 60 + t.minute) - (_oraInizio.hour * 60 + _oraInizio.minute);
+      final diff = (t.hour * 60 + t.minute) -
+                   (_oraInizio.hour * 60 + _oraInizio.minute);
       if (diff > 0) _durataMinuti = diff;
     });
   }
 
   String _timeStr(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   String _durataLabel() {
     final h = _durataMinuti ~/ 60;
@@ -111,6 +125,37 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   double get _tariffa => double.tryParse(_tariffaController.text) ?? 0;
   double get _totale => _oreTotali * _tariffa;
 
+  // ── Dialog conferma conflitto generico ──────────────────────────
+  Future<bool> _showConflictDialog({
+    required String titolo,
+    required String messaggio,
+    required Color colore,
+  }) async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.warning_amber, color: colore),
+          SizedBox(width: 8),
+          Text(titolo),
+        ]),
+        content: Text(messaggio),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Annulla'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: colore),
+            child: Text('Continua'),
+          ),
+        ],
+      ),
+    );
+    return go == true;
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedRoom == null) { _err('Seleziona una stanza'); return; }
@@ -118,44 +163,53 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     setState(() => _loading = true);
 
     final auth = Provider.of<AuthService>(context, listen: false);
+    final inicio = _timeStr(_oraInizio);
+    final fine = _timeStr(_oraFine);
 
-    final conflict = await _aptService.checkRoomConflict(
-      _selectedRoom!.id!, widget.selectedDay,
-      _timeStr(_oraInizio), _timeStr(_oraFine),
+    // ── Controllo conflitto STANZA ──────────────────────────────
+    final roomConflict = await _aptService.checkRoomConflict(
+      _selectedRoom!.id!, _selectedDay, inicio, fine,
       excludeId: widget.appointment?.id,
     );
-
-    if (conflict != null && mounted) {
-      final go = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Row(children: [
-            Icon(Icons.warning_amber, color: Colors.orange),
-            SizedBox(width: 8), Text('Conflitto Stanza'),
-          ]),
-          content: Text(
-            '"${_selectedRoom!.name}" è già occupata\nda "${conflict.titolo}"\n'
-            '(${conflict.oraInizio} – ${conflict.oraFine})\n\nContinuare?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false),
-                child: Text('Annulla')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: Text('Continua'),
-            ),
-          ],
-        ),
+    if (roomConflict != null && mounted) {
+      final go = await _showConflictDialog(
+        titolo: 'Conflitto Stanza',
+        messaggio:
+            '"${_selectedRoom!.name}" è già occupata\n'
+            'da "${roomConflict.titolo}"\n'
+            '(${roomConflict.oraInizio} – ${roomConflict.oraFine})\n\n'
+            'Vuoi continuare comunque?',
+        colore: Colors.orange,
       );
-      if (go != true) { setState(() => _loading = false); return; }
+      if (!go) { setState(() => _loading = false); return; }
+    }
+
+    // ── Controllo conflitto CLIENTE ✅ NUOVO ────────────────────
+    final clientConflict = await _aptService.checkClientConflict(
+      _selectedClient!.id!, _selectedDay, inicio, fine,
+      excludeId: widget.appointment?.id,
+    );
+    if (clientConflict != null && mounted) {
+      final go = await _showConflictDialog(
+        titolo: 'Conflitto Cliente',
+        messaggio:
+            '"${_selectedClient!.fullName}" ha già un appuntamento\n'
+            'in questo orario: "${clientConflict.titolo}"\n'
+            '(${clientConflict.oraInizio} – ${clientConflict.oraFine})\n\n'
+            'Vuoi continuare comunque?',
+        colore: Colors.red,
+      );
+      if (!go) { setState(() => _loading = false); return; }
     }
 
     try {
       if (isEditing) {
         await _aptService.updateAppointment(widget.appointment!.id!, {
           'titolo': _titoloController.text,
-          'oraInizio': _timeStr(_oraInizio),
-          'oraFine': _timeStr(_oraFine),
+          'data': Timestamp.fromDate(
+              DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day)),
+          'oraInizio': inicio,
+          'oraFine': fine,
           'oreTotali': _oreTotali,
           'tariffa': _tariffa,
           'totale': _totale,
@@ -167,9 +221,9 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       } else {
         await _aptService.createAppointment(Appointment(
           titolo: _titoloController.text,
-          data: widget.selectedDay,
-          oraInizio: _timeStr(_oraInizio),
-          oraFine: _timeStr(_oraFine),
+          data: DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day),
+          oraInizio: inicio,
+          oraFine: fine,
           oreTotali: _oreTotali,
           tariffa: _tariffa,
           totale: _totale,
@@ -218,28 +272,35 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
               ),
               SizedBox(height: 16),
 
-              // DATA
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: primary.withOpacity(0.05),
-                  border: Border.all(color: primary.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(children: [
-                  Icon(Icons.calendar_today, color: primary, size: 18),
-                  SizedBox(width: 10),
-                  Text(
-                    '${widget.selectedDay.day.toString().padLeft(2,'0')}/'
-                    '${widget.selectedDay.month.toString().padLeft(2,'0')}/'
-                    '${widget.selectedDay.year}',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              // DATA — cliccabile
+              InkWell(
+                onTap: _pickDate,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: primary.withOpacity(0.05),
+                    border: Border.all(color: primary.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ]),
+                  child: Row(children: [
+                    Icon(Icons.calendar_today, color: primary, size: 18),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${_selectedDay.day.toString().padLeft(2, '0')}/'
+                        '${_selectedDay.month.toString().padLeft(2, '0')}/'
+                        '${_selectedDay.year}',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Icon(Icons.edit_calendar, color: primary, size: 18),
+                  ]),
+                ),
               ),
               SizedBox(height: 20),
 
-              // ORARI - SEZIONE PRINCIPALE
+              // ORARI
               Text('Orario', style: TextStyle(
                   fontWeight: FontWeight.w600, color: Colors.grey[700],
                   fontSize: 13, letterSpacing: 0.5)),
@@ -248,7 +309,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ORA INIZIO
                   Expanded(
                     child: TimePicker24h(
                       label: 'Inizio',
@@ -257,66 +317,43 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     ),
                   ),
                   SizedBox(width: 12),
-
-                  // DURATA al centro
-                  Column(
-                    children: [
-                      Text('Durata', style: TextStyle(fontSize: 12,
-                          color: Colors.grey[600], fontWeight: FontWeight.w500)),
-                      SizedBox(height: 4),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: primary.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: primary.withOpacity(0.2)),
-                        ),
-                        child: Column(children: [
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _durataMinuti = (_durataMinuti + 15).clamp(15, 480);
-                                final totalMin = _oraInizio.hour * 60 +
-                                    _oraInizio.minute + _durataMinuti;
-                                _oraFine = TimeOfDay(
-                                    hour: (totalMin ~/ 60) % 24,
-                                    minute: totalMin % 60);
-                              });
-                            },
-                            child: Icon(Icons.add_circle_outline,
-                                color: primary, size: 22),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            _durataLabel(),
-                            style: TextStyle(
-                              color: primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _durataMinuti = (_durataMinuti - 15).clamp(15, 480);
-                                final totalMin = _oraInizio.hour * 60 +
-                                    _oraInizio.minute + _durataMinuti;
-                                _oraFine = TimeOfDay(
-                                    hour: (totalMin ~/ 60) % 24,
-                                    minute: totalMin % 60);
-                              });
-                            },
-                            child: Icon(Icons.remove_circle_outline,
-                                color: primary, size: 22),
-                          ),
-                        ]),
+                  Column(children: [
+                    Text('Durata', style: TextStyle(
+                        fontSize: 12, color: Colors.grey[600],
+                        fontWeight: FontWeight.w500)),
+                    SizedBox(height: 4),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: primary.withOpacity(0.2)),
                       ),
-                    ],
-                  ),
+                      child: Column(children: [
+                        InkWell(
+                          onTap: () => setState(() {
+                            _durataMinuti = (_durataMinuti + 15).clamp(15, 480);
+                            final t = _oraInizio.hour * 60 + _oraInizio.minute + _durataMinuti;
+                            _oraFine = TimeOfDay(hour: (t ~/ 60) % 24, minute: t % 60);
+                          }),
+                          child: Icon(Icons.add_circle_outline, color: primary, size: 22),
+                        ),
+                        SizedBox(height: 4),
+                        Text(_durataLabel(), style: TextStyle(
+                            color: primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                        SizedBox(height: 4),
+                        InkWell(
+                          onTap: () => setState(() {
+                            _durataMinuti = (_durataMinuti - 15).clamp(15, 480);
+                            final t = _oraInizio.hour * 60 + _oraInizio.minute + _durataMinuti;
+                            _oraFine = TimeOfDay(hour: (t ~/ 60) % 24, minute: t % 60);
+                          }),
+                          child: Icon(Icons.remove_circle_outline, color: primary, size: 22),
+                        ),
+                      ]),
+                    ),
+                  ]),
                   SizedBox(width: 12),
-
-                  // ORA FINE
                   Expanded(
                     child: TimePicker24h(
                       label: 'Fine',
@@ -343,9 +380,9 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     value: r,
                     child: Row(children: [
                       Container(width: 12, height: 12,
-                          decoration: BoxDecoration(color: c,
-                              shape: BoxShape.circle)),
-                      SizedBox(width: 8), Text(r.name),
+                          decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                      SizedBox(width: 8),
+                      Text(r.name),
                     ]),
                   );
                 }).toList(),
@@ -395,8 +432,10 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('${_timeStr(_oraInizio)} → ${_timeStr(_oraFine)}  •  ${_durataLabel()}',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      Text(
+                        '${_timeStr(_oraInizio)} → ${_timeStr(_oraFine)}  •  ${_durataLabel()}',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
                       SizedBox(height: 2),
                       Text('Totale stimato',
                           style: TextStyle(color: primary, fontSize: 13)),

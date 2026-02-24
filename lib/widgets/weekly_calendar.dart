@@ -70,24 +70,65 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   Color _rColor(String? id) {
     if (id == null || !_rooms.containsKey(id)) return Colors.grey;
     try {
-      return Color(int.parse('FF${_rooms[id]!.color.replaceAll('#','')}', radix: 16));
+      return Color(int.parse('FF${_rooms[id]!.color.replaceAll('#', '')}', radix: 16));
     } catch (_) { return Colors.grey; }
   }
 
-  // Pixel dall'inizio griglia
   double _topOf(String t) {
     final p = t.split(':');
     if (p.length < 2) return 0;
     return ((int.parse(p[0]) - _start) + int.parse(p[1]) / 60.0) * _hourH;
   }
 
-  // Altezza in pixel
   double _hOf(String s, String e) {
     final sp = s.split(':'); final ep = e.split(':');
     if (sp.length < 2 || ep.length < 2) return _hourH;
     final diff = (int.parse(ep[0]) * 60 + int.parse(ep[1])) -
                  (int.parse(sp[0]) * 60 + int.parse(sp[1]));
     return (diff.clamp(15, 900) / 60.0) * _hourH;
+  }
+
+  // ── ALGORITMO COLONNE per appuntamenti sovrapposti ✅ NUOVO ─────
+  // Restituisce per ogni appuntamento: {colIndex, totalCols}
+  Map<String, _ColLayout> _computeLayout(List<Appointment> apts) {
+    final result = <String, _ColLayout>{};
+    // Ordina per ora inizio
+    final sorted = [...apts]..sort((a, b) =>
+        a.oraInizio.compareTo(b.oraInizio));
+
+    // Raggruppa in cluster di appuntamenti sovrapposti
+    final clusters = <List<Appointment>>[];
+    for (final apt in sorted) {
+      bool added = false;
+      for (final cluster in clusters) {
+        // Se si sovrappone con almeno uno nel cluster, aggiungilo
+        if (cluster.any((c) => _overlaps(c, apt))) {
+          cluster.add(apt);
+          added = true;
+          break;
+        }
+      }
+      if (!added) clusters.add([apt]);
+    }
+
+    for (final cluster in clusters) {
+      final n = cluster.length;
+      for (int i = 0; i < n; i++) {
+        result[cluster[i].id ?? cluster[i].titolo] = _ColLayout(i, n);
+      }
+    }
+    return result;
+  }
+
+  bool _overlaps(Appointment a, Appointment b) {
+    final s1 = _toMin(a.oraInizio); final e1 = _toMin(a.oraFine);
+    final s2 = _toMin(b.oraInizio); final e2 = _toMin(b.oraFine);
+    return s1 < e2 && e1 > s2;
+  }
+
+  int _toMin(String t) {
+    final p = t.split(':');
+    return int.parse(p[0]) * 60 + int.parse(p[1]);
   }
 
   @override
@@ -109,8 +150,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
             // ── HEADER ──────────────────────────────────────────
             Row(children: [
-              Container(width: _timeW, height: 56,
-                decoration: BoxDecoration(color: Colors.white)),
+              Container(
+                width: _timeW, height: 56,
+                decoration: BoxDecoration(color: Colors.white),
+              ),
               ..._days.map((d) {
                 final today = _isToday(d);
                 return Container(
@@ -168,7 +211,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             top: i * _hourH - 8,
                             right: 6,
                             child: Text(
-                              '${(_start + i).toString().padLeft(2,'0')}:00',
+                              '${(_start + i).toString().padLeft(2, '0')}:00',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: Colors.grey.shade400,
@@ -187,6 +230,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         a.data.month == d.month &&
                         a.data.day == d.day
                       ).toList();
+
+                      // ✅ Calcola layout colonne per questo giorno
+                      final layout = _computeLayout(dayApts);
 
                       return SizedBox(
                         width: dw,
@@ -244,8 +290,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             // LINEA ORA CORRENTE
                             if (today) _buildNowLine(primary),
 
-                            // ── APPUNTAMENTI ──────────────────────
+                            // ── APPUNTAMENTI con layout colonne ✅
                             ...dayApts.map((apt) {
+                              final key = apt.id ?? apt.titolo;
+                              final col = layout[key] ?? _ColLayout(0, 1);
                               final top = _topOf(apt.oraInizio).clamp(0.0, totalH - 26.0);
                               final h   = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
                               final uColor = _uColor(apt.userId);
@@ -254,10 +302,15 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               final isMine = apt.userId == me?.uid;
                               final canSee = isMine || (me?.isAdmin ?? false);
 
+                              // ✅ Larghezza e posizione orizzontale in base alle colonne
+                              final padding = 2.0;
+                              final colW = (dw - padding * (col.total + 1)) / col.total;
+                              final leftPos = padding + col.index * (colW + padding);
+
                               return Positioned(
                                 top: top,
-                                left: 3,
-                                right: 3,
+                                left: leftPos,
+                                width: colW,
                                 height: h,
                                 child: GestureDetector(
                                   onTap: () => widget.onTapAppointment(apt),
@@ -265,20 +318,17 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                     color: Colors.transparent,
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        // Sfondo tenue del colore utente
                                         color: uColor.withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(5),
-                                        border: Border.all(
-                                          color: uColor,
-                                          width: 1.5,
-                                        ),
+                                        border: Border.all(color: uColor, width: 1.5),
                                       ),
                                       child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
+
                                           // BARRA SINISTRA = colore stanza
                                           Container(
-                                            width: 5,
+                                            width: 4,
                                             decoration: BoxDecoration(
                                               color: rColor,
                                               borderRadius: BorderRadius.only(
@@ -287,77 +337,88 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                               ),
                                             ),
                                           ),
+
                                           // CONTENUTO
                                           Expanded(
                                             child: Padding(
                                               padding: EdgeInsets.symmetric(
-                                                  horizontal: 5, vertical: 3),
+                                                  horizontal: 4, vertical: 3),
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
+
                                                   // ORARIO
                                                   Text(
-                                                    '${apt.oraInizio} – ${apt.oraFine}',
+                                                    '${apt.oraInizio}–${apt.oraFine}',
                                                     style: TextStyle(
-                                                      fontSize: 11,
+                                                      fontSize: col.total > 1 ? 10 : 13,
                                                       color: Colors.black54,
                                                       fontWeight: FontWeight.w500,
                                                     ),
+                                                    overflow: TextOverflow.ellipsis,
                                                   ),
+
                                                   // TITOLO
                                                   Text(
                                                     apt.titolo,
                                                     style: TextStyle(
-                                                      fontSize: 11,
+                                                      fontSize: col.total > 1 ? 11 : 13,
                                                       fontWeight: FontWeight.w700,
                                                       color: Colors.black87,
                                                       height: 1.2,
                                                     ),
-                                                    maxLines: 2,
+                                                    maxLines: col.total > 1 ? 1 : 2,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
+
                                                   // STANZA
-                                                  if (room != null && h > 46)
+                                                  if (room != null && h > 46 && col.total <= 2)
                                                     Row(children: [
                                                       Container(
-                                                        width: 7, height: 7,
+                                                        width: 6, height: 6,
                                                         margin: EdgeInsets.only(right: 3),
                                                         decoration: BoxDecoration(
                                                           color: rColor,
                                                           shape: BoxShape.circle,
                                                         ),
                                                       ),
-                                                      Text(
-                                                        room.name,
-                                                        style: TextStyle(
-                                                          fontSize: 11,
-                                                          color: rColor,
-                                                          fontWeight: FontWeight.w700,
+                                                      Expanded(
+                                                        child: Text(
+                                                          room.name,
+                                                          style: TextStyle(
+                                                            fontSize: col.total > 1 ? 10 : 13,
+                                                            color: rColor,
+                                                            fontWeight: FontWeight.w700,
+                                                          ),
+                                                          overflow: TextOverflow.ellipsis,
                                                         ),
                                                       ),
                                                     ]),
+
                                                   // UTENTE
-                                                  if (canSee && h > 62 && _uName(apt.userId).isNotEmpty)
+                                                  if (canSee && h > 62 && col.total == 1 && _uName(apt.userId).isNotEmpty)
                                                     Text(
                                                       _uName(apt.userId),
                                                       style: TextStyle(
-                                                        fontSize: 11,
+                                                        fontSize: 13,
                                                         color: uColor,
                                                         fontWeight: FontWeight.w600,
                                                       ),
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
                                                     ),
+
                                                   // TARIFFA
-                                                  if (canSee && h > 76)
+                                                  if (canSee && h > 76 && col.total == 1)
                                                     Text(
-                                                      '€${apt.tariffa.toStringAsFixed(0)}/h  ·  €${apt.totale.toStringAsFixed(0)} tot',
+                                                      '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
                                                       style: TextStyle(
-                                                        fontSize: 11,
+                                                        fontSize: 13,
                                                         color: Colors.black45,
                                                       ),
                                                     ),
+
                                                 ],
                                               ),
                                             ),
@@ -377,6 +438,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                 ),
               ),
             )),
+
           ]);
         });
       },
@@ -394,8 +456,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
           width: 8, height: 8,
           decoration: BoxDecoration(color: c, shape: BoxShape.circle),
         ),
-        Expanded(child: Container(height: 2,
-            decoration: BoxDecoration(color: c.withOpacity(0.5)))),
+        Expanded(child: Container(
+          height: 2,
+          decoration: BoxDecoration(color: c.withOpacity(0.5)),
+        )),
       ]),
     );
   }
@@ -408,3 +472,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   String _dn(int w) => ['LUN','MAR','MER','GIO','VEN','SAB','DOM'][w - 1];
 }
 
+// ── Helper per layout colonne ──────────────────────────────────────
+class _ColLayout {
+  final int index;
+  final int total;
+  const _ColLayout(this.index, this.total);
+}

@@ -34,13 +34,46 @@ class AppointmentService {
     });
   }
 
-  // Check conflitti stanza
-  Future<Appointment?> checkRoomConflict(String roomId, DateTime data, String oraInizio, String oraFine, {String? excludeId}) async {
+  // ── Check conflitti STANZA ──────────────────────────────────────
+  Future<Appointment?> checkRoomConflict(
+    String roomId,
+    DateTime data,
+    String oraInizio,
+    String oraFine, {
+    String? excludeId,
+  }) async {
     final snap = await _firestore
         .collection('appointments')
         .where('deleted', isEqualTo: false)
         .where('roomId', isEqualTo: roomId)
-        .where('data', isEqualTo: Timestamp.fromDate(data))
+        .where('data', isEqualTo: Timestamp.fromDate(
+            DateTime(data.year, data.month, data.day)))
+        .get();
+
+    for (final doc in snap.docs) {
+      if (excludeId != null && doc.id == excludeId) continue;
+      final apt = Appointment.fromFirestore(doc);
+      if (_timeOverlap(oraInizio, oraFine, apt.oraInizio, apt.oraFine)) {
+        return apt;
+      }
+    }
+    return null;
+  }
+
+  // ── Check conflitti CLIENTE ✅ NUOVO ────────────────────────────
+  Future<Appointment?> checkClientConflict(
+    String clientId,
+    DateTime data,
+    String oraInizio,
+    String oraFine, {
+    String? excludeId,
+  }) async {
+    final snap = await _firestore
+        .collection('appointments')
+        .where('deleted', isEqualTo: false)
+        .where('clientId', isEqualTo: clientId)
+        .where('data', isEqualTo: Timestamp.fromDate(
+            DateTime(data.year, data.month, data.day)))
         .get();
 
     for (final doc in snap.docs) {
