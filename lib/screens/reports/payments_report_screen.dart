@@ -418,13 +418,13 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             Icon(
               active ? Icons.check : Icons.circle_outlined,
               size: 13,
-              color: active ? activeColor.shade700 : Colors.grey[400],
+              color: active ? activeColor : Colors.grey[400],
             ),
             const SizedBox(width: 5),
             Text(label, style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: active ? activeColor.shade700 : Colors.grey[400],
+              color: active ? activeColor : Colors.grey[400],
             )),
             if (!enabled) ...[
               const SizedBox(width: 4),
@@ -502,3 +502,4 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     );
   }
 }
+
