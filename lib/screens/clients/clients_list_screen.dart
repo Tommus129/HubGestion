@@ -17,11 +17,11 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Clienti'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: Icon(_showArchived ? Icons.archive : Icons.archive_outlined),
@@ -81,121 +81,75 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                     final client = clients[i];
                     return Card(
                       margin: EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        // ✅ Tap → apre scheda dettaglio
-                        onTap: () => _showClientDetail(context, client),
+                        onTap: () => _showClientDetail(context, client, primary),
                         child: Padding(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
+                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                           child: Row(
                             children: [
-
-                              // AVATAR
                               CircleAvatar(
                                 radius: 22,
-                                backgroundColor:
-                                    client.archived ? Colors.grey : Colors.teal,
+                                backgroundColor: client.archived ? Colors.grey : primary,
                                 child: Text(
-                                  client.nome.isNotEmpty
-                                      ? client.nome[0].toUpperCase()
-                                      : 'C',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16),
+                                  client.nome.isNotEmpty ? client.nome[0].toUpperCase() : 'C',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                                 ),
                               ),
                               SizedBox(width: 12),
-
-                              // DATI
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Row(children: [
                                       Text(client.fullName,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14)),
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                                       if (client.archived) ...[
                                         SizedBox(width: 8),
                                         Container(
-                                          padding: EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
+                                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
                                             color: Colors.grey[200],
-                                            borderRadius:
-                                                BorderRadius.circular(4),
+                                            borderRadius: BorderRadius.circular(4),
                                           ),
-                                          child: Text('Archiviato',
-                                              style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey)),
+                                          child: Text('Archiviato', style: TextStyle(fontSize: 10, color: Colors.grey)),
                                         ),
                                       ],
                                     ]),
                                     SizedBox(height: 2),
-                                    // Email e telefono in anteprima
                                     if ((client.email ?? '').isNotEmpty)
-                                      _infoRow(Icons.email_outlined,
-                                          client.email!, 11),
+                                      _infoRow(Icons.email_outlined, client.email!, 11),
                                     if ((client.telefono ?? '').isNotEmpty)
-                                      _infoRow(Icons.phone_outlined,
-                                          client.telefono!, 11),
-                                    // Indicatore note
+                                      _infoRow(Icons.phone_outlined, client.telefono!, 11),
                                     if ((client.note ?? '').isNotEmpty)
                                       Row(children: [
-                                        Icon(Icons.note_outlined,
-                                            size: 11, color: Colors.amber[700]),
+                                        Icon(Icons.note_outlined, size: 11, color: Colors.amber[700]),
                                         SizedBox(width: 3),
                                         Text('Note presenti',
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                color: Colors.amber[700],
-                                                fontStyle: FontStyle.italic)),
+                                            style: TextStyle(fontSize: 11, color: Colors.amber[700], fontStyle: FontStyle.italic)),
                                       ]),
                                   ],
                                 ),
                               ),
-
-                              // MENU
                               PopupMenuButton(
                                 itemBuilder: (_) => [
                                   PopupMenuItem(
                                     value: 'edit',
-                                    child: Row(children: [
-                                      Icon(Icons.edit, size: 16),
-                                      SizedBox(width: 8),
-                                      Text('Modifica'),
-                                    ]),
+                                    child: Row(children: [Icon(Icons.edit, size: 16), SizedBox(width: 8), Text('Modifica')]),
                                   ),
                                   PopupMenuItem(
                                     value: 'archive',
                                     child: Row(children: [
-                                      Icon(
-                                        client.archived
-                                            ? Icons.unarchive
-                                            : Icons.archive,
-                                        size: 16,
-                                      ),
+                                      Icon(client.archived ? Icons.unarchive : Icons.archive, size: 16),
                                       SizedBox(width: 8),
-                                      Text(client.archived
-                                          ? 'Riattiva'
-                                          : 'Archivia'),
+                                      Text(client.archived ? 'Riattiva' : 'Archivia'),
                                     ]),
                                   ),
                                 ],
                                 onSelected: (value) {
-                                  if (value == 'edit') {
-                                    _showClientDialog(context, client: client);
-                                  }
-                                  if (value == 'archive') {
-                                    _clientService.archiveClient(
-                                        client.id!, !client.archived);
-                                  }
+                                  if (value == 'edit') _showClientDialog(context, primary, client: client);
+                                  if (value == 'archive') _clientService.archiveClient(client.id!, !client.archived);
                                 },
                               ),
                             ],
@@ -211,18 +165,14 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showClientDialog(context),
-        backgroundColor: Colors.teal,
+        onPressed: () => _showClientDialog(context, primary),
         icon: Icon(Icons.person_add, color: Colors.white),
         label: Text('Nuovo Cliente', style: TextStyle(color: Colors.white)),
       ),
     );
   }
 
-  // ✅ Scheda dettaglio cliente — BottomSheet
-  void _showClientDetail(BuildContext context, Client client) {
-    final primary = Colors.teal;
-
+  void _showClientDetail(BuildContext context, Client client, Color primary) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -240,33 +190,20 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
             controller: scrollCtrl,
             padding: EdgeInsets.fromLTRB(20, 0, 20, 32),
             children: [
-
-              // HANDLE
               Center(
                 child: Container(
                   margin: EdgeInsets.only(top: 12, bottom: 16),
                   width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
                 ),
               ),
-
-              // AVATAR + NOME
               Row(children: [
                 CircleAvatar(
                   radius: 28,
-                  backgroundColor:
-                      client.archived ? Colors.grey : primary,
+                  backgroundColor: client.archived ? Colors.grey : primary,
                   child: Text(
-                    client.nome.isNotEmpty
-                        ? client.nome[0].toUpperCase()
-                        : 'C',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold),
+                    client.nome.isNotEmpty ? client.nome[0].toUpperCase() : 'C',
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                 ),
                 SizedBox(width: 14),
@@ -274,68 +211,38 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(client.fullName,
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text(client.fullName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       if (client.archived)
                         Container(
                           margin: EdgeInsets.only(top: 4),
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('Archiviato',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey)),
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+                          child: Text('Archiviato', style: TextStyle(fontSize: 11, color: Colors.grey)),
                         ),
                     ],
                   ),
                 ),
-                // Pulsante modifica
                 IconButton(
                   icon: Icon(Icons.edit_outlined, color: primary),
                   tooltip: 'Modifica',
                   onPressed: () {
                     Navigator.pop(context);
-                    _showClientDialog(context, client: client);
+                    _showClientDialog(context, primary, client: client);
                   },
                 ),
               ]),
-
               Divider(height: 28),
-
-              // ── DATI CONTATTO ──────────────────────────────
               _sectionTitle('Contatto'),
               SizedBox(height: 10),
-
               if ((client.email ?? '').isNotEmpty)
-                _detailRow(
-                  icon: Icons.email_outlined,
-                  color: Colors.blue,
-                  label: 'Email',
-                  value: client.email!,
-                  copiable: true,
-                ),
-
+                _detailRow(icon: Icons.email_outlined, color: Colors.blue, label: 'Email', value: client.email!, copiable: true),
               if ((client.telefono ?? '').isNotEmpty)
-                _detailRow(
-                  icon: Icons.phone_outlined,
-                  color: Colors.green,
-                  label: 'Telefono',
-                  value: client.telefono!,
-                  copiable: true,
-                ),
-
+                _detailRow(icon: Icons.phone_outlined, color: Colors.green, label: 'Telefono', value: client.telefono!, copiable: true),
               if ((client.email ?? '').isEmpty && (client.telefono ?? '').isEmpty)
                 Padding(
                   padding: EdgeInsets.only(bottom: 8),
-                  child: Text('Nessun contatto inserito',
-                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  child: Text('Nessun contatto inserito', style: TextStyle(color: Colors.grey, fontSize: 13)),
                 ),
-
-              // ── NOTE ──────────────────────────────────────
               if ((client.note ?? '').isNotEmpty) ...[
                 Divider(height: 28),
                 _sectionTitle('Note'),
@@ -346,40 +253,22 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   decoration: BoxDecoration(
                     color: Colors.amber.withOpacity(0.07),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: Colors.amber.withOpacity(0.3)),
+                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
                   ),
-                  child: Text(
-                    client.note!,
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        height: 1.5),
-                  ),
+                  child: Text(client.note!, style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
                 ),
               ],
-
               SizedBox(height: 20),
-
-              // PULSANTI AZIONE
               Row(children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      _clientService.archiveClient(
-                          client.id!, !client.archived);
+                      _clientService.archiveClient(client.id!, !client.archived);
                     },
-                    icon: Icon(
-                      client.archived ? Icons.unarchive : Icons.archive,
-                      size: 16,
-                    ),
-                    label: Text(
-                        client.archived ? 'Riattiva' : 'Archivia'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.grey[700],
-                      side: BorderSide(color: Colors.grey[300]!),
-                    ),
+                    icon: Icon(client.archived ? Icons.unarchive : Icons.archive, size: 16),
+                    label: Text(client.archived ? 'Riattiva' : 'Archivia'),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.grey[700], side: BorderSide(color: Colors.grey[300]!)),
                   ),
                 ),
                 SizedBox(width: 10),
@@ -387,14 +276,11 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   child: ElevatedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      _showClientDialog(context, client: client);
+                      _showClientDialog(context, primary, client: client);
                     },
                     icon: Icon(Icons.edit, size: 16),
                     label: Text('Modifica'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primary,
-                      foregroundColor: Colors.white,
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white),
                   ),
                 ),
               ]),
@@ -406,29 +292,16 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
   }
 
   Widget _sectionTitle(String t) => Text(t,
-      style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Colors.grey[500],
-          letterSpacing: 0.8));
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey[500], letterSpacing: 0.8));
 
-  Widget _detailRow({
-    required IconData icon,
-    required Color color,
-    required String label,
-    required String value,
-    bool copiable = false,
-  }) {
+  Widget _detailRow({required IconData icon, required Color color, required String label, required String value, bool copiable = false}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
           Container(
             width: 34, height: 34,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
+            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
             child: Icon(icon, color: color, size: 18),
           ),
           SizedBox(width: 12),
@@ -436,11 +309,8 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                Text(value,
-                    style: TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w500)),
+                Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -451,11 +321,7 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('$label copiato'),
-                    duration: Duration(seconds: 1),
-                    behavior: SnackBarBehavior.floating,
-                  ),
+                  SnackBar(content: Text('$label copiato'), duration: Duration(seconds: 1), behavior: SnackBarBehavior.floating),
                 );
               },
             ),
@@ -465,103 +331,47 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
   }
 
   Widget _infoRow(IconData icon, String text, double size) => Row(
-        children: [
-          Icon(icon, size: size, color: Colors.grey[500]),
-          SizedBox(width: 3),
-          Text(text,
-              style: TextStyle(fontSize: size, color: Colors.grey[600])),
-        ],
-      );
+    children: [
+      Icon(icon, size: size, color: Colors.grey[500]),
+      SizedBox(width: 3),
+      Text(text, style: TextStyle(fontSize: size, color: Colors.grey[600])),
+    ],
+  );
 
-  void _showClientDialog(BuildContext context, {Client? client}) {
-    final nomeController =
-        TextEditingController(text: client?.nome ?? '');
-    final cognomeController =
-        TextEditingController(text: client?.cognome ?? '');
-    final emailController =
-        TextEditingController(text: client?.email ?? '');
-    final telefonoController =
-        TextEditingController(text: client?.telefono ?? '');
-    final noteController =
-        TextEditingController(text: client?.note ?? '');
+  void _showClientDialog(BuildContext context, Color primary, {Client? client}) {
+    final nomeController = TextEditingController(text: client?.nome ?? '');
+    final cognomeController = TextEditingController(text: client?.cognome ?? '');
+    final emailController = TextEditingController(text: client?.email ?? '');
+    final telefonoController = TextEditingController(text: client?.telefono ?? '');
+    final noteController = TextEditingController(text: client?.note ?? '');
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title:
-            Text(client == null ? 'Nuovo Cliente' : 'Modifica Cliente'),
+        title: Text(client == null ? 'Nuovo Cliente' : 'Modifica Cliente'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(children: [
-                Expanded(
-                  child: TextField(
-                    controller: nomeController,
-                    decoration: InputDecoration(
-                      labelText: 'Nome *',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
+                Expanded(child: TextField(controller: nomeController, decoration: InputDecoration(labelText: 'Nome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
                 SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: cognomeController,
-                    decoration: InputDecoration(
-                      labelText: 'Cognome *',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                ),
+                Expanded(child: TextField(controller: cognomeController, decoration: InputDecoration(labelText: 'Cognome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
               ]),
               SizedBox(height: 12),
-              TextField(
-                controller: emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
+              TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
               SizedBox(height: 12),
-              TextField(
-                controller: telefonoController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  labelText: 'Telefono',
-                  prefixIcon: Icon(Icons.phone_outlined),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
+              TextField(controller: telefonoController, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Telefono', prefixIcon: Icon(Icons.phone_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
               SizedBox(height: 12),
-              TextField(
-                controller: noteController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Note',
-                  prefixIcon: Icon(Icons.note_outlined),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
+              TextField(controller: noteController, maxLines: 3, decoration: InputDecoration(labelText: 'Note', prefixIcon: Icon(Icons.note_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
             ],
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Annulla'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
           ElevatedButton(
             onPressed: () async {
-              if (nomeController.text.isEmpty ||
-                  cognomeController.text.isEmpty) return;
+              if (nomeController.text.isEmpty || cognomeController.text.isEmpty) return;
               final newClient = Client(
                 id: client?.id,
                 nome: nomeController.text.trim(),
@@ -573,14 +383,11 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
               if (client == null) {
                 await ClientService().createClient(newClient);
               } else {
-                await ClientService()
-                    .updateClient(client.id!, newClient.toFirestore());
+                await ClientService().updateClient(client.id!, newClient.toFirestore());
               }
               Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white),
             child: Text(client == null ? 'Crea' : 'Salva'),
           ),
         ],

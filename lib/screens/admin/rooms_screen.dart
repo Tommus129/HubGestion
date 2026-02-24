@@ -9,12 +9,10 @@ class RoomsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Stanze'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: Text('Stanze')),
       drawer: AppDrawer(),
       body: StreamBuilder<List<Room>>(
         stream: _roomService.getRooms(),
@@ -36,7 +34,6 @@ class RoomsScreen extends StatelessWidget {
               ),
             );
           }
-
           final rooms = snapshot.data!;
           return ListView.builder(
             padding: EdgeInsets.all(16),
@@ -48,12 +45,8 @@ class RoomsScreen extends StatelessWidget {
                 margin: EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
                     child: Icon(Icons.meeting_room, color: Colors.white),
                   ),
                   title: Text(room.name, style: TextStyle(fontWeight: FontWeight.bold)),
@@ -61,14 +54,8 @@ class RoomsScreen extends StatelessWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: Icon(Icons.edit, color: Colors.teal),
-                        onPressed: () => _showRoomDialog(context, room: room),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _confirmDelete(context, room),
-                      ),
+                      IconButton(icon: Icon(Icons.edit, color: primary), onPressed: () => _showRoomDialog(context, primary, room: room)),
+                      IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => _confirmDelete(context, room)),
                     ],
                   ),
                 ),
@@ -78,15 +65,14 @@ class RoomsScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showRoomDialog(context),
-        backgroundColor: Colors.teal,
+        onPressed: () => _showRoomDialog(context, primary),
         icon: Icon(Icons.add, color: Colors.white),
         label: Text('Nuova Stanza', style: TextStyle(color: Colors.white)),
       ),
     );
   }
 
-  void _showRoomDialog(BuildContext context, {Room? room}) {
+  void _showRoomDialog(BuildContext context, Color primary, {Room? room}) {
     final nameController = TextEditingController(text: room?.name ?? '');
     final capacityController = TextEditingController(text: room?.capacity?.toString() ?? '');
     final noteController = TextEditingController(text: room?.note ?? '');
@@ -108,49 +94,25 @@ class RoomsScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'Nome stanza *',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
+                TextField(controller: nameController, decoration: InputDecoration(labelText: 'Nome stanza *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
                 SizedBox(height: 16),
-                TextField(
-                  controller: capacityController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Capacità (opzionale)',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
+                TextField(controller: capacityController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Capacità (opzionale)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
                 SizedBox(height: 16),
-                TextField(
-                  controller: noteController,
-                  decoration: InputDecoration(
-                    labelText: 'Note (opzionale)',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
+                TextField(controller: noteController, decoration: InputDecoration(labelText: 'Note (opzionale)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
                 SizedBox(height: 16),
                 Text('Colore:', style: TextStyle(fontWeight: FontWeight.bold)),
                 SizedBox(height: 8),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 8, runSpacing: 8,
                   children: colors.map((c) {
                     final col = Color(int.parse('FF${c.replaceAll("#", "")}', radix: 16));
                     return GestureDetector(
                       onTap: () => setDialogState(() => selectedColor = c),
                       child: Container(
-                        width: 36,
-                        height: 36,
+                        width: 36, height: 36,
                         decoration: BoxDecoration(
-                          color: col,
-                          shape: BoxShape.circle,
-                          border: selectedColor == c
-                              ? Border.all(color: Colors.black, width: 3)
-                              : null,
+                          color: col, shape: BoxShape.circle,
+                          border: selectedColor == c ? Border.all(color: Colors.black, width: 3) : null,
                         ),
                       ),
                     );
@@ -160,28 +122,16 @@ class RoomsScreen extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Annulla'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.isEmpty) return;
-                final newRoom = Room(
-                  id: room?.id,
-                  name: nameController.text,
-                  color: selectedColor,
-                  capacity: int.tryParse(capacityController.text),
-                  note: noteController.text,
-                );
-                if (room == null) {
-                  await RoomService().createRoom(newRoom);
-                } else {
-                  await RoomService().updateRoom(room.id!, newRoom.toFirestore());
-                }
+                final newRoom = Room(id: room?.id, name: nameController.text, color: selectedColor, capacity: int.tryParse(capacityController.text), note: noteController.text);
+                if (room == null) { await RoomService().createRoom(newRoom); }
+                else { await RoomService().updateRoom(room.id!, newRoom.toFirestore()); }
                 Navigator.pop(context);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white),
               child: Text(room == null ? 'Crea' : 'Salva'),
             ),
           ],
@@ -199,10 +149,7 @@ class RoomsScreen extends StatelessWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
           ElevatedButton(
-            onPressed: () async {
-              await RoomService().deleteRoom(room.id!);
-              Navigator.pop(context);
-            },
+            onPressed: () async { await RoomService().deleteRoom(room.id!); Navigator.pop(context); },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: Text('Elimina'),
           ),
