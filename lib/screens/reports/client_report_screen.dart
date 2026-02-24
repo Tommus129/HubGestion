@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../../models/client.dart';
 import '../../models/appointment.dart';
+import '../../models/client.dart';
 import '../../services/client_service.dart';
 import '../../services/appointment_service.dart';
 import '../../services/auth_service.dart';
-import '../../utils/date_helpers.dart';
 import '../../widgets/app_drawer.dart';
+import '../../utils/date_helpers.dart';
 
 class ClientReportScreen extends StatefulWidget {
   @override
@@ -16,256 +17,492 @@ class ClientReportScreen extends StatefulWidget {
 class _ClientReportScreenState extends State<ClientReportScreen> {
   final ClientService _clientService = ClientService();
   final AppointmentService _aptService = AppointmentService();
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // ── FILTRI ─────────────────────────────────────────────────────────────────
   Client? _selectedClient;
+  String _periodoType = 'mese'; // mese | anno | sempre | custom
+  int _selectedMonth = DateTime.now().month;
+  int _selectedYear  = DateTime.now().year;
+  DateTime? _customFrom;
+  DateTime? _customTo;
+  String _filtroFatturato = 'tutti';  // tutti | si | no
+  String _filtroPageto    = 'tutti';  // tutti | si | no
+
+  // ── DATI ───────────────────────────────────────────────────────────────────
   List<Client> _clients = [];
   List<Appointment> _appointments = [];
-  String _periodo = 'mese';
-  final DateTime _now = DateTime.now();
-  final Set<String> _updating = {};
+  Map<String, String> _userNames = {};
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
     _clientService.getClients().listen((c) => setState(() => _clients = c));
+    _loadUserNames();
   }
 
-  void _loadAppointments() {
-    if (_selectedClient == null) return;
-    DateTime start, end;
-    switch (_periodo) {
-      case 'mese':
-        start = DateTime(_now.year, _now.month, 1);
-        end = DateTime(_now.year, _now.month + 1, 0);
-        break;
-      case 'anno':
-        start = DateTime(_now.year, 1, 1);
-        end = DateTime(_now.year, 12, 31);
-        break;
-      default:
-        start = DateTime(2020);
-        end = DateTime(2030);
-    }
-    _aptService.getAppointments(start, end).listen((apts) {
-      setState(() { _appointments = apts.where((a) => a.clientId == _selectedClient!.id).toList(); });
+  Future<void> _loadUserNames() async {
+    final snap = await _db.collection('users').get();
+    setState(() {
+      _userNames = {
+        for (final d in snap.docs)
+          d.id: (d.data()['displayName']?.toString().isNotEmpty == true
+              ? d.data()['displayName']
+              : d.data()['email']) ?? d.id
+      };
     });
   }
 
-  List<Appointment> _visibleApts(String? myUid, bool isAdmin) {
-    if (isAdmin || myUid == null) return _appointments;
-    return _appointments.where((a) => a.userId == myUid).toList();
+  Future<void> _search() async {
+    if (_selectedClient == null) return;
+    setState(() => _loading = true);
+
+    DateTime start;
+    DateTime end;
+
+    switch (_periodoType) {
+      case 'mese':
+        start = DateTime(_selectedYear, _selectedMonth, 1);
+        end   = DateTime(_selectedYear, _selectedMonth + 1, 0, 23, 59, 59);
+        break;
+      case 'anno':
+        start = DateTime(_selectedYear, 1, 1);
+        end   = DateTime(_selectedYear, 12, 31, 23, 59, 59);
+        break;
+      case 'custom':
+        if (_customFrom == null || _customTo == null) {
+          setState(() => _loading = false);
+          return;
+        }
+        start = _customFrom!;
+        end   = DateTime(_customTo!.year, _customTo!.month, _customTo!.day, 23, 59, 59);
+        break;
+      default: // sempre
+        start = DateTime(2020);
+        end   = DateTime(2099);
+    }
+
+    final snap = await _db
+        .collection('appointments')
+        .where('deleted', isEqualTo: false)
+        .where('clientId', isEqualTo: _selectedClient!.id)
+        .where('data', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('data', isLessThanOrEqualTo: Timestamp.fromDate(end))
+        .orderBy('data')
+        .get();
+
+    List<Appointment> apts =
+        snap.docs.map((d) => Appointment.fromFirestore(d)).toList();
+
+    // Filtri fatturato / pagato
+    if (_filtroFatturato == 'si')  apts = apts.where((a) => a.fatturato).toList();
+    if (_filtroFatturato == 'no')  apts = apts.where((a) => !a.fatturato).toList();
+    if (_filtroPageto    == 'si')  apts = apts.where((a) => a.pagato).toList();
+    if (_filtroPageto    == 'no')  apts = apts.where((a) => !a.pagato).toList();
+
+    setState(() { _appointments = apts; _loading = false; });
   }
 
-  Future<void> _togglePagato(Appointment apt) async {
-    if (apt.id == null) return;
-    setState(() => _updating.add(apt.id!));
-    try { await _aptService.updateAppointment(apt.id!, {'pagato': !apt.pagato}); }
-    finally { if (mounted) setState(() => _updating.remove(apt.id!)); }
-  }
-
-  Future<void> _toggleFatturato(Appointment apt) async {
-    if (apt.id == null) return;
-    setState(() => _updating.add(apt.id!));
-    try { await _aptService.updateAppointment(apt.id!, {'fatturato': !apt.fatturato}); }
-    finally { if (mounted) setState(() => _updating.remove(apt.id!)); }
-  }
+  // ── AGGREGATI ──────────────────────────────────────────────────────────────
+  double get _totGuadagno  => _appointments.fold(0, (s, a) => s + a.totale);
+  double get _totPagato    => _appointments.where((a) => a.pagato).fold(0, (s, a) => s + a.totale);
+  double get _totFatturato => _appointments.where((a) => a.fatturato && !a.pagato).fold(0, (s, a) => s + a.totale);
+  double get _totNonFatt   => _appointments.where((a) => !a.fatturato).fold(0, (s, a) => s + a.totale);
+  double get _totOre       => _appointments.fold(0, (s, a) => s + a.oreTotali);
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final auth = Provider.of<AuthService>(context);
-    final me = auth.currentUser;
-    final isAdmin = me?.isAdmin ?? false;
-    final myUid = me?.uid;
-    final visApts = _visibleApts(myUid, isAdmin);
-    final totaleOre     = visApts.fold(0.0, (s, a) => s + a.oreTotali);
-    final totaleImporto = visApts.fold(0.0, (s, a) => s + a.totale);
-    final totalePagato  = visApts.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
-    final totaleNonPagato = totaleImporto - totalePagato;
+    final auth    = Provider.of<AuthService>(context);
+    final isAdmin = auth.currentUser?.isAdmin ?? false;
 
     return Scaffold(
       appBar: AppBar(title: Text('Report Cliente')),
       drawer: AppDrawer(),
-      body: Column(
-        children: [
-          Container(
-            padding: EdgeInsets.all(16),
-            color: Colors.grey[50],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+
+            // ── SELEZIONE CLIENTE ─────────────────────────────────
+            DropdownButtonFormField<Client>(
+              value: _selectedClient,
+              decoration: InputDecoration(
+                labelText: 'Cliente *',
+                prefixIcon: Icon(Icons.person),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              items: _clients.map((c) => DropdownMenuItem(
+                value: c, child: Text(c.fullName),
+              )).toList(),
+              onChanged: (v) => setState(() {
+                _selectedClient = v;
+                _appointments = [];
+              }),
+              hint: Text('Seleziona cliente'),
+            ),
+            SizedBox(height: 16),
+
+            // ── PERIODO ───────────────────────────────────────────
+            _sectionLabel('Periodo', primary),
+            SizedBox(height: 8),
+            Wrap(
+              spacing: 8, runSpacing: 8,
               children: [
-                DropdownButtonFormField<Client>(
-                  value: _selectedClient,
-                  decoration: InputDecoration(
-                    labelText: 'Seleziona Cliente',
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    filled: true, fillColor: Colors.white,
-                  ),
-                  items: _clients.map((c) => DropdownMenuItem(value: c, child: Text(c.fullName))).toList(),
-                  onChanged: (c) { setState(() => _selectedClient = c); _loadAppointments(); },
-                  hint: Text('Scegli un cliente...'),
-                ),
-                SizedBox(height: 12),
-                Row(
-                  children: ['mese', 'anno', 'sempre'].map((p) => Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(p == 'mese' ? 'Questo mese' : p == 'anno' ? 'Quest\'anno' : 'Sempre'),
-                        selected: _periodo == p,
-                        selectedColor: primary,
-                        labelStyle: TextStyle(color: _periodo == p ? Colors.white : Colors.black),
-                        onSelected: (_) { setState(() => _periodo = p); _loadAppointments(); },
-                      ),
-                    ),
-                  )).toList(),
-                ),
-                if (!isAdmin && _selectedClient != null)
-                  Padding(
-                    padding: EdgeInsets.only(top: 10),
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.withOpacity(0.25)),
-                      ),
-                      child: Row(children: [
-                        Icon(Icons.info_outline, color: Colors.blue, size: 16),
-                        SizedBox(width: 8),
-                        Expanded(child: Text('Visualizzi solo i tuoi appuntamenti con questo cliente.', style: TextStyle(fontSize: 12, color: Colors.blue.shade700))),
-                      ]),
-                    ),
-                  ),
+                _periodoChip('mese',   'Mese',        primary),
+                _periodoChip('anno',   'Anno',         primary),
+                _periodoChip('sempre', 'Sempre',       primary),
+                _periodoChip('custom', 'Personalizzato', primary),
               ],
             ),
-          ),
-          if (_selectedClient != null && visApts.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  _statCard('Ore', '${totaleOre.toStringAsFixed(1)}h', Colors.blue),
-                  SizedBox(width: 6),
-                  _statCard('Totale', DateHelpers.formatCurrency(totaleImporto), primary),
-                  SizedBox(width: 6),
-                  _statCard('Pagato', DateHelpers.formatCurrency(totalePagato), Colors.green),
-                  SizedBox(width: 6),
-                  _statCard('Da Pagare', DateHelpers.formatCurrency(totaleNonPagato), Colors.red),
+            SizedBox(height: 12),
+
+            // Selettore mese/anno
+            if (_periodoType == 'mese' || _periodoType == 'anno') ...[
+              Row(children: [
+                if (_periodoType == 'mese') ...[
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedMonth,
+                      decoration: InputDecoration(
+                        labelText: 'Mese',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      items: List.generate(12, (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text(_monthName(i + 1)),
+                      )),
+                      onChanged: (v) => setState(() => _selectedMonth = v!),
+                    ),
+                  ),
+                  SizedBox(width: 12),
                 ],
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    value: _selectedYear,
+                    decoration: InputDecoration(
+                      labelText: 'Anno',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: List.generate(8, (i) => DropdownMenuItem(
+                      value: 2024 + i,
+                      child: Text('${2024 + i}'),
+                    )),
+                    onChanged: (v) => setState(() => _selectedYear = v!),
+                  ),
+                ),
+              ]),
+              SizedBox(height: 12),
+            ],
+
+            // Date picker custom
+            if (_periodoType == 'custom') ...[
+              Row(children: [
+                Expanded(child: _datePicker('Dal', _customFrom, (d) => setState(() => _customFrom = d), primary)),
+                SizedBox(width: 12),
+                Expanded(child: _datePicker('Al',  _customTo,   (d) => setState(() => _customTo   = d), primary)),
+              ]),
+              SizedBox(height: 12),
+            ],
+
+            // ── FILTRI STATO ──────────────────────────────────────
+            Row(children: [
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionLabel('Fatturato', primary),
+                  SizedBox(height: 6),
+                  _statoSegmented(
+                    value: _filtroFatturato,
+                    onChange: (v) => setState(() => _filtroFatturato = v),
+                    primary: primary,
+                  ),
+                ],
+              )),
+              SizedBox(width: 12),
+              Expanded(child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionLabel('Pagato', primary),
+                  SizedBox(height: 6),
+                  _statoSegmented(
+                    value: _filtroPageto,
+                    onChange: (v) => setState(() => _filtroPageto = v),
+                    primary: primary,
+                  ),
+                ],
+              )),
+            ]),
+            SizedBox(height: 20),
+
+            // ── BOTTONE CERCA ─────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _selectedClient == null || _loading ? null : _search,
+                icon: _loading
+                    ? SizedBox(width: 18, height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Icon(Icons.search),
+                label: Text('Cerca', style: TextStyle(fontSize: 15)),
               ),
             ),
-          Expanded(
-            child: _selectedClient == null
-                ? Center(child: Text('Seleziona un cliente per vedere il report', style: TextStyle(color: Colors.grey)))
-                : visApts.isEmpty
-                    ? Center(child: Text('Nessun appuntamento nel periodo selezionato', style: TextStyle(color: Colors.grey)))
-                    : ListView.builder(
-                        padding: EdgeInsets.all(12),
-                        itemCount: visApts.length,
-                        itemBuilder: (context, i) {
-                          final apt = visApts[i];
-                          final isUpdating = _updating.contains(apt.id);
-                          return Card(
-                            margin: EdgeInsets.only(bottom: 10),
-                            elevation: 1,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(child: Text(apt.titolo, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-                                      Text(DateHelpers.formatCurrency(apt.totale), style: TextStyle(fontWeight: FontWeight.bold, color: primary, fontSize: 15)),
-                                    ],
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    '${DateHelpers.formatDate(apt.data)}  •  ${apt.oraInizio}-${apt.oraFine}  •  ${apt.oreTotali.toStringAsFixed(1)}h',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                  ),
-                                  SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: isUpdating ? null : () => _toggleFatturato(apt),
-                                          child: AnimatedContainer(
-                                            duration: Duration(milliseconds: 180),
-                                            padding: EdgeInsets.symmetric(vertical: 7),
-                                            decoration: BoxDecoration(
-                                              color: apt.fatturato ? Colors.orange.withOpacity(0.15) : Colors.grey.withOpacity(0.08),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: apt.fatturato ? Colors.orange : Colors.grey.shade300, width: apt.fatturato ? 1.5 : 1.0),
-                                            ),
-                                            child: isUpdating
-                                                ? Center(child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)))
-                                                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                                    Icon(apt.fatturato ? Icons.receipt_long : Icons.receipt_long_outlined, size: 14, color: apt.fatturato ? Colors.orange.shade800 : Colors.grey.shade500),
-                                                    SizedBox(width: 5),
-                                                    Text(apt.fatturato ? 'Fatturato' : 'Non fatturato', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: apt.fatturato ? Colors.orange.shade800 : Colors.grey.shade500)),
-                                                  ]),
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: isUpdating ? null : () => _togglePagato(apt),
-                                          child: AnimatedContainer(
-                                            duration: Duration(milliseconds: 180),
-                                            padding: EdgeInsets.symmetric(vertical: 7),
-                                            decoration: BoxDecoration(
-                                              color: apt.pagato ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.07),
-                                              borderRadius: BorderRadius.circular(8),
-                                              border: Border.all(color: apt.pagato ? Colors.green : Colors.red.shade300, width: apt.pagato ? 1.5 : 1.0),
-                                            ),
-                                            child: isUpdating
-                                                ? Center(child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green)))
-                                                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                                    Icon(apt.pagato ? Icons.check_circle : Icons.cancel_outlined, size: 14, color: apt.pagato ? Colors.green.shade700 : Colors.red.shade400),
-                                                    SizedBox(width: 5),
-                                                    Text(apt.pagato ? 'Pagato' : 'Non pagato', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: apt.pagato ? Colors.green.shade700 : Colors.red.shade400)),
-                                                  ]),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _statCard(String label, String value, Color color) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
-            SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 9, color: Colors.grey)),
+            // ── RISULTATI ─────────────────────────────────────────
+            if (_appointments.isNotEmpty) ...[
+              SizedBox(height: 24),
+
+              // CARDS METRICHE
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 2.2,
+                children: [
+                  _metricCard('Ore totali',    '${_totOre.toStringAsFixed(1)}h', Icons.access_time, primary),
+                  _metricCard('Totale',        DateHelpers.formatCurrency(_totGuadagno), Icons.euro, Colors.blueGrey),
+                  _metricCard('Incassato',     DateHelpers.formatCurrency(_totPagato),   Icons.check_circle, Colors.green),
+                  _metricCard('Non fatturato', DateHelpers.formatCurrency(_totNonFatt),  Icons.receipt_long, Colors.red),
+                ],
+              ),
+              SizedBox(height: 20),
+
+              // TABELLA APPUNTAMENTI
+              _sectionLabel('Dettaglio appuntamenti (${_appointments.length})', primary),
+              SizedBox(height: 10),
+              _buildTable(primary, isAdmin),
+            ],
+
+            if (_appointments.isEmpty && !_loading && _selectedClient != null)
+              Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: Center(
+                  child: Column(children: [
+                    Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
+                    SizedBox(height: 8),
+                    Text('Nessun appuntamento trovato',
+                        style: TextStyle(color: Colors.grey)),
+                  ]),
+                ),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  // ── TABELLA ────────────────────────────────────────────────────────────────
+  Widget _buildTable(Color primary, bool isAdmin) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor: WidgetStateProperty.all(primary.withOpacity(0.07)),
+        dataRowMinHeight: 40,
+        dataRowMaxHeight: 52,
+        columnSpacing: 16,
+        columns: [
+          DataColumn(label: Text('Data',    style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('Titolo',  style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('Persona', style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('Ore',     style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+          DataColumn(label: Text('Tariffa', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+          DataColumn(label: Text('Totale',  style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+          DataColumn(label: Text('Fatt.',   style: TextStyle(fontWeight: FontWeight.bold))),
+          DataColumn(label: Text('Pag.',    style: TextStyle(fontWeight: FontWeight.bold))),
+        ],
+        rows: _appointments.map((apt) {
+          final nome = _userNames[apt.userId] ?? apt.userId.substring(0, 8);
+          return DataRow(cells: [
+            DataCell(Text(DateHelpers.formatDateShort(apt.data),
+                style: TextStyle(fontSize: 12))),
+            DataCell(ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 140),
+              child: Text(apt.titolo,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            )),
+            // ✅ Colonna Persona
+            DataCell(Text(nome, style: TextStyle(fontSize: 12))),
+            DataCell(Text(apt.oreTotali.toStringAsFixed(1),
+                style: TextStyle(fontSize: 12))),
+            DataCell(Text('€${apt.tariffa.toStringAsFixed(0)}',
+                style: TextStyle(fontSize: 12))),
+            DataCell(Text(DateHelpers.formatCurrency(apt.totale),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+            DataCell(_statusDot(apt.fatturato, Colors.orange)),
+            DataCell(_statusDot(apt.pagato, Colors.green)),
+          ]);
+        }).toList(),
+        // ── RIGA TOTALI ────────────────────────────────────────
+        ...[],
+      ),
+    );
+  }
+
+  Widget _statusDot(bool active, Color color) {
+    return Icon(
+      active ? Icons.check_circle : Icons.radio_button_unchecked,
+      color: active ? color : Colors.grey[300],
+      size: 18,
+    );
+  }
+
+  // ── WIDGET HELPERS ─────────────────────────────────────────────────────────
+  Widget _periodoChip(String value, String label, Color primary) {
+    final active = _periodoType == value;
+    return GestureDetector(
+      onTap: () => setState(() { _periodoType = value; _appointments = []; }),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 150),
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? primary : Colors.grey.shade300),
+        ),
+        child: Text(label,
+            style: TextStyle(
+              color: active ? Colors.white : Colors.grey[700],
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+              fontSize: 13,
+            )),
+      ),
+    );
+  }
+
+  Widget _statoSegmented({
+    required String value,
+    required Function(String) onChange,
+    required Color primary,
+  }) {
+    return Row(children: [
+      _segBtn('tutti', 'Tutti', value, onChange, primary),
+      SizedBox(width: 6),
+      _segBtn('si', 'Sì', value, onChange, primary),
+      SizedBox(width: 6),
+      _segBtn('no', 'No', value, onChange, primary),
+    ]);
+  }
+
+  Widget _segBtn(String val, String label, String current,
+      Function(String) onChange, Color primary) {
+    final active = current == val;
+    return GestureDetector(
+      onTap: () => onChange(val),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? primary.withOpacity(0.12) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+              color: active ? primary : Colors.grey.shade300,
+              width: active ? 1.5 : 1.0),
+        ),
+        child: Text(label,
+            style: TextStyle(
+              fontSize: 12,
+              color: active ? primary : Colors.grey[700],
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+            )),
+      ),
+    );
+  }
+
+  Widget _datePicker(String label, DateTime? value,
+      Function(DateTime) onPick, Color primary) {
+    return InkWell(
+      onTap: () async {
+        final d = await showDatePicker(
+          context: context,
+          initialDate: value ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2030),
+        );
+        if (d != null) onPick(d);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: value != null ? primary.withOpacity(0.05) : Colors.grey[50],
+          border: Border.all(
+              color: value != null ? primary.withOpacity(0.4) : Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Icon(Icons.calendar_today,
+              size: 15, color: value != null ? primary : Colors.grey),
+          SizedBox(width: 8),
+          Text(
+            value != null
+                ? '${value.day.toString().padLeft(2, '0')}/'
+                  '${value.month.toString().padLeft(2, '0')}/'
+                  '${value.year}'
+                : label,
+            style: TextStyle(
+              fontSize: 13,
+              color: value != null ? Colors.black87 : Colors.grey,
+              fontWeight: value != null ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _metricCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        SizedBox(width: 10),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(label,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: color)),
+          ],
+        )),
+      ]),
+    );
+  }
+
+  Widget _sectionLabel(String text, Color color) {
+    return Text(text,
+        style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: color,
+            letterSpacing: 0.5));
+  }
+
+  String _monthName(int m) {
+    const months = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    return months[m - 1];
   }
 }
