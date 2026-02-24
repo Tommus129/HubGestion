@@ -303,7 +303,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        headingRowColor: WidgetStateProperty.all(primary.withOpacity(0.07)),
+        headingRowColor: MaterialStateProperty.all(primary.withOpacity(0.07)),
         dataRowMinHeight: 40,
         dataRowMaxHeight: 52,
         columnSpacing: 16,
@@ -340,9 +340,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             DataCell(_statusDot(apt.pagato, Colors.green)),
           ]);
         }).toList(),
-        // ── RIGA TOTALI ────────────────────────────────────────
-        ...[],
-      ),
+        // ── RIGA TOTALI ────────────────────────────────────────\n      ),
     );
   }
 
@@ -506,3 +504,4 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     return months[m - 1];
   }
 }
+

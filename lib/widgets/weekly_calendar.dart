@@ -31,6 +31,17 @@ class WeeklyCalendar extends StatefulWidget {
 }
 
 class _WeeklyCalendarState extends State<WeeklyCalendar> {
+
+  // ✅ Scureggia un Color (evita .shade700 che esiste solo su MaterialColor)
+  Color _darker(Color c, double amount) {
+    final a = amount.clamp(0.0, 1.0);
+    return Color.fromARGB(
+      c.alpha,
+      (c.red * (1 - a)).round(),
+      (c.green * (1 - a)).round(),
+      (c.blue * (1 - a)).round(),
+    );
+  }
   final AppointmentService _aptService = AppointmentService();
   final RoomService _roomService = RoomService();
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -454,7 +465,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         label,
         style: TextStyle(
           fontSize: 8, fontWeight: FontWeight.w700,
-          color: color == Colors.grey ? Colors.grey.shade500 : color.shade700,
+          color: color == Colors.grey
+    ? Colors.grey.shade500
+    : _darker(color, 0.35),
         ),
         overflow: TextOverflow.clip, maxLines: 1,
       ),
@@ -488,3 +501,5 @@ class _ColLayout {
   final int total;
   const _ColLayout(this.index, this.total);
 }
+
+
