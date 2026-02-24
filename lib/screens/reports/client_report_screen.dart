@@ -51,49 +51,41 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     });
   }
 
-  // ✅ Chiamata ogni volta che cambia QUALSIASI filtro
- Future<void> _autoSearch() async {
-  if (_selectedClient == null) return;
-  if (_periodoType == 'custom' && (_customFrom == null || _customTo == null)) return;
+  Future<void> _autoSearch() async {
+    if (_selectedClient == null) return;
+    if (_periodoType == 'custom' && (_customFrom == null || _customTo == null)) return;
 
-  setState(() { _loading = true; _appointments = []; _allFetched = []; });
+    setState(() { _loading = true; _appointments = []; _allFetched = []; });
 
-  try {
-    // ✅ Query minima assoluta: SOLO clientId, nessun orderBy → nessun indice necessario
-    final snap = await _db
-        .collection('appointments')
-        .where('clientId', isEqualTo: _selectedClient!.id)
-        .get();
+    try {
+      final snap = await _db
+          .collection('appointments')
+          .where('clientId', isEqualTo: _selectedClient!.id)
+          .get();
 
-    debugPrint('>>> Trovati ${snap.docs.length} doc');
+      debugPrint('>>> Trovati ${snap.docs.length} doc per ${_selectedClient!.fullName}');
 
-    final all = snap.docs.map((d) {
-      try { return Appointment.fromFirestore(d); }
-      catch (e) { debugPrint('>>> Parse error ${d.id}: $e'); return null; }
-    }).whereType<Appointment>()
-      // Ordina in memoria invece che con orderBy Firestore
-      .toList()..sort((a, b) => a.data.compareTo(b.data));
+      final all = snap.docs.map((d) {
+        try { return Appointment.fromFirestore(d); }
+        catch (e) { debugPrint('>>> Parse error ${d.id}: $e'); return null; }
+      }).whereType<Appointment>()
+          .toList()..sort((a, b) => a.data.compareTo(b.data));
 
-    setState(() { _allFetched = all; });
-    _applyLocalFilters();
+      setState(() { _allFetched = all; });
+      _applyLocalFilters();
 
-  } catch (e) {
-    debugPrint('>>> ERRORE: $e');
-    setState(() => _loading = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Errore: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+    } catch (e) {
+      debugPrint('>>> ERRORE: $e');
+      setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5)),
+        );
+      }
     }
   }
-}
 
-
-  // ✅ Tutti i filtri applicati in memoria (periodo, fatturato, pagato)
   void _applyLocalFilters() {
     DateTime start;
     DateTime end;
@@ -118,6 +110,9 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     }
 
     List<Appointment> filtered = _allFetched.where((a) {
+      // ✅ Escludi soft-deleted
+      if (a.deleted == true) return false;
+      // Filtro periodo
       if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
       return true;
     }).toList();
@@ -127,7 +122,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     if (_filtroPageto    == 'si') filtered = filtered.where((a) => a.pagato).toList();
     if (_filtroPageto    == 'no') filtered = filtered.where((a) => !a.pagato).toList();
 
-    debugPrint('>>> Filtrati: ${filtered.length} appuntamenti');
+    debugPrint('>>> Filtrati: ${filtered.length}');
     setState(() { _appointments = filtered; _loading = false; });
   }
 
@@ -151,7 +146,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── SELEZIONE CLIENTE — avvia ricerca automatica ──────
             DropdownButtonFormField<Client>(
               value: _selectedClient,
               decoration: InputDecoration(
@@ -164,23 +158,21 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               )).toList(),
               onChanged: (v) {
                 setState(() { _selectedClient = v; _appointments = []; _allFetched = []; });
-                // ✅ Avvia subito la ricerca
                 _autoSearch();
               },
               hint: const Text('Seleziona cliente per vedere il report'),
             ),
             const SizedBox(height: 16),
 
-            // ── PERIODO ───────────────────────────────────────────
             _sectionLabel('Periodo', primary),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8, runSpacing: 8,
               children: [
-                _periodoChip('mese',   'Mese',          primary),
-                _periodoChip('anno',   'Anno',           primary),
-                _periodoChip('sempre', 'Sempre',         primary),
-                _periodoChip('custom', 'Personalizzato', primary),
+                _periodoChip('mese',   'Mese',           primary),
+                _periodoChip('anno',   'Anno',            primary),
+                _periodoChip('sempre', 'Sempre',          primary),
+                _periodoChip('custom', 'Personalizzato',  primary),
               ],
             ),
             const SizedBox(height: 12),
@@ -225,19 +217,16 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             if (_periodoType == 'custom') ...[
               Row(children: [
                 Expanded(child: _datePicker('Dal', _customFrom, (d) {
-                  setState(() => _customFrom = d);
-                  _applyLocalFilters();
+                  setState(() => _customFrom = d); _applyLocalFilters();
                 }, primary)),
                 const SizedBox(width: 12),
                 Expanded(child: _datePicker('Al', _customTo, (d) {
-                  setState(() => _customTo = d);
-                  _applyLocalFilters();
+                  setState(() => _customTo = d); _applyLocalFilters();
                 }, primary)),
               ]),
               const SizedBox(height: 12),
             ],
 
-            // ── FILTRI STATO ──────────────────────────────────────
             Row(children: [
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,56 +256,46 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             ]),
             const SizedBox(height: 20),
 
-            // ── LOADING ───────────────────────────────────────────
             if (_loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(child: CircularProgressIndicator()),
               ),
 
-            // ── NESSUN CLIENTE SELEZIONATO ────────────────────────
             if (!_loading && _selectedClient == null)
               Padding(
                 padding: const EdgeInsets.only(top: 40),
-                child: Center(
-                  child: Column(children: [
-                    Icon(Icons.person_search, size: 64, color: Colors.grey[300]),
-                    const SizedBox(height: 12),
-                    Text('Seleziona un cliente per vedere il report',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 15)),
-                  ]),
-                ),
+                child: Center(child: Column(children: [
+                  Icon(Icons.person_search, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 12),
+                  Text('Seleziona un cliente per vedere il report',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 15)),
+                ])),
               ),
 
-            // ── NESSUN RISULTATO ──────────────────────────────────
             if (!_loading && _selectedClient != null && _appointments.isEmpty && _allFetched.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 40),
-                child: Center(
-                  child: Column(children: [
-                    Icon(Icons.filter_alt_off, size: 48, color: Colors.grey[300]),
-                    const SizedBox(height: 8),
-                    const Text('Nessun appuntamento con questi filtri',
-                        style: TextStyle(color: Colors.grey)),
-                  ]),
-                ),
+                child: Center(child: Column(children: [
+                  Icon(Icons.filter_alt_off, size: 48, color: Colors.grey[300]),
+                  const SizedBox(height: 8),
+                  const Text('Nessun appuntamento con questi filtri',
+                      style: TextStyle(color: Colors.grey)),
+                ])),
               ),
 
-            if (!_loading && _selectedClient != null && _allFetched.isEmpty && _appointments.isEmpty)
+            if (!_loading && _selectedClient != null && _allFetched.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 40),
-                child: Center(
-                  child: Column(children: [
-                    Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
-                    const SizedBox(height: 8),
-                    Text('Nessun appuntamento trovato per ${_selectedClient!.fullName}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.grey)),
-                  ]),
-                ),
+                child: Center(child: Column(children: [
+                  Icon(Icons.search_off, size: 48, color: Colors.grey[300]),
+                  const SizedBox(height: 8),
+                  Text('Nessun appuntamento per ${_selectedClient!.fullName}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey)),
+                ])),
               ),
 
-            // ── RISULTATI ─────────────────────────────────────────
             if (!_loading && _appointments.isNotEmpty) ...[
               GridView.count(
                 crossAxisCount: 2,
@@ -333,7 +312,19 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              _sectionLabel('Appuntamenti (${_appointments.length})', primary),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _sectionLabel('Appuntamenti (${_appointments.length})', primary),
+                  // ✅ Legenda toggle
+                  Row(children: [
+                    Icon(Icons.touch_app, size: 13, color: Colors.grey[400]),
+                    const SizedBox(width: 4),
+                    Text('Tocca Fatt./Pag. per aggiornare',
+                        style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+                  ]),
+                ],
+              ),
               const SizedBox(height: 10),
               _buildTable(primary, isAdmin),
             ],
@@ -379,39 +370,50 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 style: const TextStyle(fontSize: 12))),
             DataCell(Text(DateHelpers.formatCurrency(apt.totale),
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-            DataCell(_statusDot(apt.fatturato, Colors.orange)),
-            DataCell(_statusDot(apt.pagato,    Colors.green)),
+
+            // ✅ Toggle FATTURATO (solo admin)
+            DataCell(
+              Tooltip(
+                message: isAdmin
+                    ? (apt.fatturato ? 'Segna come non fatturato' : 'Segna come fatturato')
+                    : '',
+                child: GestureDetector(
+                  onTap: isAdmin ? () async {
+                    await _db.collection('appointments')
+                        .doc(apt.id)
+                        .update({'fatturato': !apt.fatturato});
+                    await _autoSearch();
+                  } : null,
+                  child: Icon(
+                    apt.fatturato ? Icons.check_circle : Icons.radio_button_unchecked,
+                    color: apt.fatturato ? Colors.orange : Colors.grey[300],
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+
+            // ✅ Toggle PAGATO (tutti)
+            DataCell(
+              Tooltip(
+                message: apt.pagato ? 'Segna come non pagato' : 'Segna come pagato',
+                child: GestureDetector(
+                  onTap: () async {
+                    await _db.collection('appointments')
+                        .doc(apt.id)
+                        .update({'pagato': !apt.pagato});
+                    await _autoSearch();
+                  },
+                  child: Icon(
+                    apt.pagato ? Icons.check_circle : Icons.radio_button_unchecked,
+                    color: apt.pagato ? Colors.green : Colors.grey[300],
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
           ]);
         }).toList(),
-      ),
-    );
-  }
-
-  Widget _statusDot(bool active, Color color) => Icon(
-    active ? Icons.check_circle : Icons.radio_button_unchecked,
-    color: active ? color : Colors.grey[300], size: 18,
-  );
-
-  Widget _periodoChip(String value, String label, Color primary) {
-    final active = _periodoType == value;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _periodoType = value);
-        _applyLocalFilters();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? primary : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: active ? primary : Colors.grey.shade300),
-        ),
-        child: Text(label, style: TextStyle(
-          color: active ? Colors.white : Colors.grey[700],
-          fontWeight: active ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
-        )),
       ),
     );
   }
@@ -441,6 +443,27 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           fontSize: 12,
           color: active ? primary : Colors.grey[700],
           fontWeight: active ? FontWeight.bold : FontWeight.normal,
+        )),
+      ),
+    );
+  }
+
+  Widget _periodoChip(String value, String label, Color primary) {
+    final active = _periodoType == value;
+    return GestureDetector(
+      onTap: () { setState(() => _periodoType = value); _applyLocalFilters(); },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? primary : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? primary : Colors.grey.shade300),
+        ),
+        child: Text(label, style: TextStyle(
+          color: active ? Colors.white : Colors.grey[700],
+          fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          fontSize: 13,
         )),
       ),
     );
