@@ -6,6 +6,7 @@ class UfficioUser {
   final String? displayName;
   final String role;
   final String? personaColor;
+  final double tariffa;
 
   UfficioUser({
     required this.uid,
@@ -13,6 +14,7 @@ class UfficioUser {
     this.displayName,
     this.role = 'employee',
     this.personaColor,
+    this.tariffa = 50.0,
   });
 
   factory UfficioUser.fromFirestore(Map<String, dynamic> data, String uid) {
@@ -22,6 +24,7 @@ class UfficioUser {
       displayName: data['displayName'],
       role: data['role'] ?? 'employee',
       personaColor: data['personaColor'],
+      tariffa: (data['tariffa'] as num?)?.toDouble() ?? 50.0,
     );
   }
 
@@ -31,6 +34,7 @@ class UfficioUser {
       'displayName': displayName ?? '',
       'role': role,
       'personaColor': personaColor ?? '#4ECDC4',
+      'tariffa': tariffa,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }
