@@ -11,8 +11,6 @@ class WeeklyCalendar extends StatefulWidget {
   final DateTime focusedWeek;
   final Function(Appointment) onTapAppointment;
   final Function(DateTime) onTapSlot;
-
-  // ✅ Nuovi parametri filtro
   final String? filterUserId;
   final String? filterRoomId;
   final String? filterClientId;
@@ -31,17 +29,6 @@ class WeeklyCalendar extends StatefulWidget {
 }
 
 class _WeeklyCalendarState extends State<WeeklyCalendar> {
-
-  // ✅ Scureggia un Color (evita .shade700 che esiste solo su MaterialColor)
-  Color _darker(Color c, double amount) {
-    final a = amount.clamp(0.0, 1.0);
-    return Color.fromARGB(
-      c.alpha,
-      (c.red * (1 - a)).round(),
-      (c.green * (1 - a)).round(),
-      (c.blue * (1 - a)).round(),
-    );
-  }
   final AppointmentService _aptService = AppointmentService();
   final RoomService _roomService = RoomService();
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -93,6 +80,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       m[doc.id] = '${d['nome'] ?? ''} ${d['cognome'] ?? ''}'.trim();
     }
     setState(() => _clientNames = m);
+  }
+
+  Color _darker(Color c, double amount) {
+    final a = amount.clamp(0.0, 1.0);
+    return Color.fromARGB(
+      c.alpha,
+      (c.red * (1 - a)).round(),
+      (c.green * (1 - a)).round(),
+      (c.blue * (1 - a)).round(),
+    );
   }
 
   Color _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
@@ -152,7 +149,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return int.parse(p[0]) * 60 + int.parse(p[1]);
   }
 
-  // ✅ Applica i filtri combinati agli appuntamenti del giorno
   List<Appointment> _applyFilters(List<Appointment> apts) {
     return apts.where((a) {
       if (widget.filterUserId != null && a.userId != widget.filterUserId) return false;
@@ -247,8 +243,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     // COLONNE GIORNI
                     ..._days.map((d) {
                       final today = _isToday(d);
-
-                      // ✅ Filtro applicato per questo giorno
                       final dayApts = _applyFilters(
                         allApts.where((a) =>
                           a.data.year == d.year &&
@@ -256,7 +250,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                           a.data.day == d.day
                         ).toList(),
                       );
-
                       final layout = _computeLayout(dayApts);
 
                       return SizedBox(
@@ -346,6 +339,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                           child: Row(
                                             crossAxisAlignment: CrossAxisAlignment.stretch,
                                             children: [
+                                              // Barra laterale colore stanza
                                               Container(
                                                 width: 4,
                                                 decoration: BoxDecoration(
@@ -356,83 +350,89 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                   ),
                                                 ),
                                               ),
+                                              // Contenuto — ClipRect evita overflow
                                               Expanded(
-                                                child: Padding(
-                                                  padding: EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [].followedBy([
-                                                    children: [
-                                                      Text(
-                                                        n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
-                                                        style: TextStyle(
-                                                          fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 11),
-                                                          color: Colors.black54,
-                                                          fontWeight: FontWeight.w500,
-                                                        ),
-                                                        overflow: TextOverflow.clip, maxLines: 1,
-                                                      ),
-                                                      Text(
-                                                        apt.titolo,
-                                                        style: TextStyle(
-                                                          fontSize: n >= 3 ? 10 : (n == 2 ? 11 : 13),
-                                                          fontWeight: FontWeight.w700,
-                                                          color: Colors.black87, height: 1.2,
-                                                        ),
-                                                        maxLines: n >= 3 ? 1 : (n == 2 ? 1 : 2),
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                      if (room != null && h > sogliaStanza)
-                                                        Row(children: [
-                                                          Container(
-                                                            width: 6, height: 6,
-                                                            margin: EdgeInsets.only(right: 3, top: 1),
-                                                            decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
-                                                          ),
-                                                          Expanded(child: Text(
-                                                            room.name,
-                                                            style: TextStyle(fontSize: 10, color: rColor, fontWeight: FontWeight.w700),
-                                                            overflow: TextOverflow.ellipsis, maxLines: 1,
-                                                          )),
-                                                        ]),
-                                                      if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
-                                                        Row(children: [
-                                                          Icon(Icons.person, size: 9, color: Colors.black45),
-                                                          SizedBox(width: 2),
-                                                          Expanded(child: Text(
-                                                            clienteNome,
-                                                            style: TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w600),
-                                                            overflow: TextOverflow.ellipsis, maxLines: 1,
-                                                          )),
-                                                        ]),
-                                                      if (canSee && h > sogliaTariffa)
+                                                child: ClipRect(
+                                                  child: Padding(
+                                                    padding: EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        // Orario
                                                         Text(
-                                                          '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-                                                          style: TextStyle(fontSize: 9, color: Colors.black38, fontWeight: FontWeight.w500),
-                                                          overflow: TextOverflow.ellipsis, maxLines: 1,
-                                                        ),
-                                                      if (canSee && h > sogliaBadge)
-  Padding(
-    padding: EdgeInsets.only(top: 2),
-    child: Wrap(
-      spacing: 2,
-      runSpacing: 2,
-      children: [
-        _badge(
-          apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
-          apt.fatturato ? Colors.orange : Colors.grey,
-        ),
-        _badge(
-          apt.pagato ? 'Pag.✓' : 'Pag.✗',
-          apt.pagato ? Colors.green : Colors.grey,
-        ),
-      ],
-    ),
-  ),
-
+                                                          n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
+                                                          style: TextStyle(
+                                                            fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 11),
+                                                            color: Colors.black54,
+                                                            fontWeight: FontWeight.w500,
                                                           ),
-                                                    ],
+                                                          overflow: TextOverflow.clip, maxLines: 1,
+                                                        ),
+                                                        // Titolo
+                                                        Text(
+                                                          apt.titolo,
+                                                          style: TextStyle(
+                                                            fontSize: n >= 3 ? 10 : (n == 2 ? 11 : 13),
+                                                            fontWeight: FontWeight.w700,
+                                                            color: Colors.black87, height: 1.2,
+                                                          ),
+                                                          maxLines: n >= 3 ? 1 : (n == 2 ? 1 : 2),
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        // Stanza
+                                                        if (room != null && h > sogliaStanza)
+                                                          Row(children: [
+                                                            Container(
+                                                              width: 6, height: 6,
+                                                              margin: EdgeInsets.only(right: 3, top: 1),
+                                                              decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
+                                                            ),
+                                                            Expanded(child: Text(
+                                                              room.name,
+                                                              style: TextStyle(fontSize: 10, color: rColor, fontWeight: FontWeight.w700),
+                                                              overflow: TextOverflow.ellipsis, maxLines: 1,
+                                                            )),
+                                                          ]),
+                                                        // Cliente
+                                                        if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
+                                                          Row(children: [
+                                                            Icon(Icons.person, size: 9, color: Colors.black45),
+                                                            SizedBox(width: 2),
+                                                            Expanded(child: Text(
+                                                              clienteNome,
+                                                              style: TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w600),
+                                                              overflow: TextOverflow.ellipsis, maxLines: 1,
+                                                            )),
+                                                          ]),
+                                                        // Tariffa
+                                                        if (canSee && h > sogliaTariffa)
+                                                          Text(
+                                                            '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
+                                                            style: TextStyle(fontSize: 9, color: Colors.black38, fontWeight: FontWeight.w500),
+                                                            overflow: TextOverflow.ellipsis, maxLines: 1,
+                                                          ),
+                                                        // Badge Fatt/Pag — Wrap evita overflow orizzontale
+                                                        if (canSee && h > sogliaBadge)
+                                                          Padding(
+                                                            padding: EdgeInsets.only(top: 2),
+                                                            child: Wrap(
+                                                              spacing: 2,
+                                                              runSpacing: 2,
+                                                              children: [
+                                                                _badge(
+                                                                  apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+                                                                  apt.fatturato ? Colors.orange : Colors.grey,
+                                                                ),
+                                                                _badge(
+                                                                  apt.pagato ? 'Pag.✓' : 'Pag.✗',
+                                                                  apt.pagato ? Colors.green : Colors.grey,
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -471,9 +471,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         label,
         style: TextStyle(
           fontSize: 8, fontWeight: FontWeight.w700,
-          color: color == Colors.grey
-    ? Colors.grey.shade500
-    : _darker(color, 0.35),
+          color: color == Colors.grey ? Colors.grey.shade500 : _darker(color, 0.35),
         ),
         overflow: TextOverflow.clip, maxLines: 1,
       ),
@@ -507,8 +505,3 @@ class _ColLayout {
   final int total;
   const _ColLayout(this.index, this.total);
 }
-
-
-
-
-
