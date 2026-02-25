@@ -101,22 +101,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     } catch (_) { return Colors.grey; }
   }
 
+  // Converte orario stringa "HH:MM" in pixel dall'inizio della griglia
   double _topOf(String t) {
     final p = t.split(':');
     if (p.length < 2) return 0;
     return ((int.parse(p[0]) - _start) + int.parse(p[1]) / 60.0) * _hourH;
   }
 
-  double _hOf(String s, String e) {
-    final sp = s.split(':'); final ep = e.split(':');
-    if (sp.length < 2 || ep.length < 2) return _hourH;
-    final diff = (int.parse(ep[0]) * 60 + int.parse(ep[1])) -
-                 (int.parse(sp[0]) * 60 + int.parse(sp[1]));
-    return (diff.clamp(15, 900) / 60.0) * _hourH;
-  }
-
   int _toMin(String t) {
     final p = t.split(':');
+    if (p.length < 2) return 0;
     return int.parse(p[0]) * 60 + int.parse(p[1]);
   }
 
@@ -156,20 +150,19 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     }).toList();
   }
 
-  // ── Contenuto card adattivo ───────────────────────────────────────
+  // ── Contenuto card adattivo ──────────────────────────────────────────────
+  // Riceve l'altezza DISPONIBILE (in px) e mostra solo ciò che ci sta.
   Widget _aptContent({
     required Appointment apt,
-    required double h,
-    required double w,
+    required double availH,
     required int n,
-    required Color uColor,
     required Color rColor,
     required Room? room,
     required bool canSee,
     required String clienteNome,
   }) {
-    final vPad  = h < 32 ? 1.0 : (h < 48 ? 2.0 : 3.0);
-    final avail = h - vPad * 2;
+    final vPad = availH < 32 ? 1.0 : (availH < 48 ? 2.0 : 3.0);
+    final budget = availH - vPad * 2;
 
     const double rowOrario  = 11.0;
     const double rowTitolo  = 13.0;
@@ -177,11 +170,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     const double rowCliente = 11.0;
     const double rowTariffa = 10.0;
     const double rowBadge   = 13.0;
-    const double gap        = 1.0;
+    const double gap        = 1.5;
 
     double used = 0;
     bool show(double rowH) {
-      if (used + rowH + gap > avail) return false;
+      if (used + rowH > budget) return false;
       used += rowH + gap;
       return true;
     }
@@ -193,81 +186,73 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final showTariffa = canSee && n == 1 && show(rowTariffa);
     final showBadge   = canSee && n <= 2 && show(rowBadge);
 
-    // ✅ Avvolgiamo tutto in SizedBox con altezza esatta + ClipRect
-    // Questo impedisce QUALSIASI overflow del contenuto interno,
-    // indipendentemente da quanto sia piccola la card.
-    return SizedBox(
-      height: h,
-      child: ClipRect(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 3, vertical: vPad),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showOrario)
-                Text(
-                  n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
-                  style: TextStyle(
-                    fontSize: n >= 3 ? 8 : 10,
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                ),
-              if (showTitolo)
-                Text(
-                  apt.titolo,
-                  style: TextStyle(
-                    fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 12),
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
-                    height: 1.1,
-                  ),
-                  maxLines: n >= 3 ? 1 : 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              if (showStanza)
-                Row(children: [
-                  Container(
-                    width: 6, height: 6,
-                    margin: const EdgeInsets.only(right: 2),
-                    decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
-                  ),
-                  Expanded(child: Text(
-                    room!.name,
-                    style: TextStyle(fontSize: 9, color: rColor, fontWeight: FontWeight.w700),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                  )),
-                ]),
-              if (showCliente)
-                Row(children: [
-                  const Icon(Icons.person, size: 8, color: Colors.black38),
-                  const SizedBox(width: 2),
-                  Expanded(child: Text(
-                    clienteNome,
-                    style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w600),
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                  )),
-                ]),
-              if (showTariffa)
-                Text(
-                  '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-                  style: const TextStyle(fontSize: 8, color: Colors.black38, fontWeight: FontWeight.w500),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                ),
-              if (showBadge)
-                Row(children: [
-                  _badge(apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
-                         apt.fatturato ? Colors.orange : Colors.grey),
-                  const SizedBox(width: 2),
-                  _badge(apt.pagato ? 'Pag.✓' : 'Pag.✗',
-                         apt.pagato ? Colors.green : Colors.grey),
-                ]),
-            ],
-          ),
-        ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 3, vertical: vPad),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showOrario)
+            Text(
+              n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
+              style: TextStyle(
+                fontSize: n >= 3 ? 8 : 10,
+                color: Colors.black54,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+            ),
+          if (showTitolo)
+            Text(
+              apt.titolo,
+              style: TextStyle(
+                fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 12),
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+                height: 1.1,
+              ),
+              maxLines: n >= 3 ? 1 : 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          if (showStanza)
+            Row(children: [
+              Container(
+                width: 6, height: 6,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
+              ),
+              Expanded(child: Text(
+                room!.name,
+                style: TextStyle(fontSize: 9, color: rColor, fontWeight: FontWeight.w700),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              )),
+            ]),
+          if (showCliente)
+            Row(children: [
+              const Icon(Icons.person, size: 8, color: Colors.black38),
+              const SizedBox(width: 2),
+              Expanded(child: Text(
+                clienteNome,
+                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w600),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              )),
+            ]),
+          if (showTariffa)
+            Text(
+              '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 8, color: Colors.black38, fontWeight: FontWeight.w500),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+            ),
+          if (showBadge)
+            Row(children: [
+              _badge(apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+                     apt.fatturato ? Colors.orange : Colors.grey),
+              const SizedBox(width: 2),
+              _badge(apt.pagato ? 'Pag.✓' : 'Pag.✗',
+                     apt.pagato ? Colors.green : Colors.grey),
+            ]),
+        ],
       ),
     );
   }
@@ -366,118 +351,144 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                       final layout = _computeLayout(dayApts);
 
                       return SizedBox(
-                        width: dw, height: totalH,
-                        // ✅ clipBehavior: Clip.hardEdge sullo Stack del giorno
-                        // taglia tutto ciò che sporge oltre totalH
+                        width: dw,
+                        height: totalH,
                         child: ClipRect(
+                          // ✅ ClipRect sul SizedBox del giorno: qualsiasi figlio
+                          // che eccede totalH viene tagliato senza generare errori
                           child: Stack(
                             clipBehavior: Clip.hardEdge,
                             children: [
 
-                            // Griglia
-                            ...List.generate(_end - _start, (i) =>
-                              Positioned(
-                                top: i * _hourH, left: 0, right: 0, height: _hourH,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: today ? primary.withOpacity(0.02) : Colors.white,
-                                    border: Border(
-                                      top:  BorderSide(color: Colors.grey.shade200),
-                                      left: BorderSide(color: Colors.grey.shade200),
+                              // Griglia oraria
+                              ...List.generate(_end - _start, (i) =>
+                                Positioned(
+                                  top: i * _hourH, left: 0, right: 0, height: _hourH,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: today ? primary.withOpacity(0.02) : Colors.white,
+                                      border: Border(
+                                        top:  BorderSide(color: Colors.grey.shade200),
+                                        left: BorderSide(color: Colors.grey.shade200),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
 
-                            // Linee mezz'ora
-                            ...List.generate(_end - _start, (i) =>
-                              Positioned(
-                                top: i * _hourH + _hourH / 2,
-                                left: 4, right: 0, height: 1,
-                                child: Container(color: Colors.grey.shade100),
-                              ),
-                            ),
-
-                            // Tap slot vuoto
-                            ...List.generate(_end - _start, (i) =>
-                              Positioned(
-                                top: i * _hourH, left: 0, right: 0, height: _hourH,
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.translucent,
-                                  onTap: () => widget.onTapSlot(
-                                      DateTime(d.year, d.month, d.day, _start + i)),
-                                  child: const SizedBox.expand(),
+                              // Linee mezz'ora
+                              ...List.generate(_end - _start, (i) =>
+                                Positioned(
+                                  top: i * _hourH + _hourH / 2,
+                                  left: 4, right: 0, height: 1,
+                                  child: Container(color: Colors.grey.shade100),
                                 ),
                               ),
-                            ),
 
-                            // Linea ora corrente
-                            if (today) _buildNowLine(primary),
+                              // Tap su slot vuoto
+                              ...List.generate(_end - _start, (i) =>
+                                Positioned(
+                                  top: i * _hourH, left: 0, right: 0, height: _hourH,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.translucent,
+                                    onTap: () => widget.onTapSlot(
+                                        DateTime(d.year, d.month, d.day, _start + i)),
+                                    child: const SizedBox.expand(),
+                                  ),
+                                ),
+                              ),
 
-                            // Appuntamenti
-                            ...dayApts.map((apt) {
-                              final key     = apt.id ?? apt.titolo;
-                              final col     = layout[key] ?? _ColLayout(0, 1);
-                              final top     = _topOf(apt.oraInizio).clamp(0.0, totalH - 22.0);
-                              final hRaw    = _hOf(apt.oraInizio, apt.oraFine);
-                              // ✅ FIX DEFINITIVO: top + h non supera mai totalH
-                              final h       = hRaw.clamp(22.0, totalH - top);
+                              // Linea ora corrente
+                              if (today) _buildNowLine(primary),
 
-                              final uColor = _uColor(apt.userId);
-                              final rColor = _rColor(apt.roomId);
-                              final room   = _rooms[apt.roomId];
-                              final isMine = apt.userId == me?.uid;
-                              final canSee = isMine || (me?.isAdmin ?? false);
-                              final clienteNome = canSee ? _cName(apt.clientId) : '';
+                              // ── APPUNTAMENTI ─────────────────────────────
+                              ...dayApts.map((apt) {
+                                final key = apt.id ?? apt.titolo;
+                                final col = layout[key] ?? _ColLayout(0, 1);
 
-                              final gap2    = 2.0;
-                              final colW    = (dw - gap2 * (col.total + 1)) / col.total;
-                              final leftPos = gap2 + col.index * (colW + gap2);
-                              final n       = col.total;
+                                // ✅ top calcolato in minuti, clampato a [0, totalH)
+                                final topPx = _topOf(apt.oraInizio)
+                                    .clamp(0.0, totalH - 1.0);
 
-                              return Positioned(
-                                top: top, left: leftPos, width: colW, height: h,
-                                child: GestureDetector(
-                                  onTap: () => widget.onTapAppointment(apt),
-                                  // ✅ Container con overflow nascosto a livello di card
-                                  child: Container(
-                                    clipBehavior: Clip.hardEdge,
-                                    decoration: BoxDecoration(
-                                      color: uColor.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(5),
-                                      border: Border.all(color: uColor, width: 1.5),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        // Barra stanza: altezza fissa = h
-                                        SizedBox(
-                                          width: 4, height: h,
-                                          child: Container(color: rColor),
-                                        ),
-                                        // Contenuto: SizedBox con h esatta + ClipRect
-                                        // impedisce overflow del Column interno
-                                        Expanded(
-                                          child: _aptContent(
-                                            apt: apt,
-                                            h: h,
-                                            w: colW - 4,
-                                            n: n,
-                                            uColor: uColor,
-                                            rColor: rColor,
-                                            room: room,
-                                            canSee: canSee,
-                                            clienteNome: clienteNome,
+                                // ✅ bottom calcolato in minuti, clampato a (topPx, totalH]
+                                // Nessuna height esplicita nel Positioned:
+                                // Flutter calcola da solo altezza = bottom - top
+                                // senza mai generare overflow.
+                                final bottomPx = _topOf(apt.oraFine)
+                                    .clamp(topPx + 22.0, totalH);
+
+                                final uColor = _uColor(apt.userId);
+                                final rColor = _rColor(apt.roomId);
+                                final room   = _rooms[apt.roomId];
+                                final isMine = apt.userId == me?.uid;
+                                final canSee = isMine || (me?.isAdmin ?? false);
+                                final clienteNome = canSee ? _cName(apt.clientId) : '';
+
+                                final gap2    = 2.0;
+                                final colW    = (dw - gap2 * (col.total + 1)) / col.total;
+                                final leftPos = gap2 + col.index * (colW + gap2);
+                                final n       = col.total;
+
+                                // Altezza disponibile per il contenuto
+                                // (bottomPx - topPx) è garantito >= 22px e <= totalH
+                                final cardH = bottomPx - topPx;
+
+                                return Positioned(
+                                  top:    topPx,
+                                  bottom: totalH - bottomPx,
+                                  left:   leftPos,
+                                  width:  colW,
+                                  // ❌ NON usiamo height: cardH qui dentro
+                                  // ✅ Usiamo top+bottom: Flutter calcola l'altezza
+                                  //    internamente senza overflow constraint
+                                  child: GestureDetector(
+                                    onTap: () => widget.onTapAppointment(apt),
+                                    child: DecoratedBox(
+                                      // Sfondo + bordo colorato SENZA Border.all
+                                      // (Border.all aggiunge px al box model e causa overflow)
+                                      // Il bordo visivo è ottenuto con un Container esterno
+                                      // più grande di 1.5px che funge da "outline"
+                                      decoration: BoxDecoration(
+                                        color: uColor.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      child: Container(
+                                        // Bordo come outline: un Container con colore
+                                        // e borderRadius, senza alcun Border.all
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(5),
+                                          border: Border.all(
+                                            color: uColor.withOpacity(0.8),
+                                            width: 1.0, // ridotto da 1.5 a 1.0
                                           ),
                                         ),
-                                      ],
+                                        clipBehavior: Clip.hardEdge,
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            // Barra laterale stanza
+                                            Container(width: 4, color: rColor),
+                                            // Contenuto testuale
+                                            Expanded(
+                                              child: _aptContent(
+                                                apt: apt,
+                                                availH: cardH,
+                                                n: n,
+                                                rColor: rColor,
+                                                room: room,
+                                                canSee: canSee,
+                                                clienteNome: clienteNome,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }),
-                          ]),
+                                );
+                              }),
+                            ],
+                          ),
                         ),
                       );
                     }),
@@ -516,8 +527,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return Positioned(
       top: top, left: 0, right: 0,
       child: Row(children: [
-        Container(width: 8, height: 8,
-            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        Container(
+          width: 8, height: 8,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+        ),
         Expanded(child: Container(height: 2, color: c.withOpacity(0.5))),
       ]),
     );
