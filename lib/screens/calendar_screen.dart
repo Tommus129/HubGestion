@@ -273,6 +273,7 @@ void _showUserPicker(BuildContext context, Color primary) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
+    isScrollControlled: true, // ✅ Permette al modale di occupare più spazio
     builder: (_) => _PickerSheet(
       title: 'Filtra per Persona',
       children: _users.map((u) {
@@ -311,6 +312,7 @@ void _showUserPicker(BuildContext context, Color primary) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true, // ✅ Permette al modale di occupare più spazio se serve
       builder: (_) => _PickerSheet(
         title: 'Filtra per Stanza',
         children: _rooms.map((r) {
@@ -338,6 +340,7 @@ void _showUserPicker(BuildContext context, Color primary) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true, // ✅ Permette al modale di estendersi fino al 90% dello schermo
       builder: (_) => _PickerSheet(
         title: 'Filtra per Cliente',
         children: _clients.map((cl) => _PickerItem(
@@ -425,15 +428,23 @@ class _PickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Calcoliamo una safe height massima (es. 80% dello schermo)
+    final maxHeight = MediaQuery.of(context).size.height * 0.8;
+
     return Container(
+      // Limitiamo l'altezza per far scattare lo scroll
+      constraints: BoxConstraints(
+        maxHeight: maxHeight,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(16, 0, 16, 32),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.min, // Occupa solo lo spazio necessario (fino a maxHeight)
         children: [
+          // Handle drag
           Center(
             child: Container(
               margin: EdgeInsets.only(top: 12, bottom: 16),
@@ -443,10 +454,18 @@ class _PickerSheet extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2)),
             ),
           ),
+          // Titolo
           Text(title,
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           SizedBox(height: 12),
-          ...children,
+          // ✅ LISTA SCORREVOLE: Il segreto è Flexible + SingleChildScrollView
+          Flexible(
+            child: SingleChildScrollView(
+              child: Column(
+                children: children,
+              ),
+            ),
+          ),
         ],
       ),
     );
