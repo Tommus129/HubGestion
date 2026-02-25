@@ -398,7 +398,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                           ? primary.withOpacity(0.02)
                                           : Colors.white,
                                       border: Border(
-                                        top:  BorderSide(color: Colors.grey.shade200),\n                                        left: BorderSide(color: Colors.grey.shade200),
+                                        top:  BorderSide(color: Colors.grey.shade200),
+                                        left: BorderSide(color: Colors.grey.shade200),
                                       ),
                                     ),
                                   ),
@@ -509,7 +510,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                   ),
                                 );
                               }),
-                            ],\n                          ),
+                            ],
+                          ),
                         ),
                       );
                     }),
@@ -540,7 +542,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
             ]
           ),
         ),
-        Expanded(child: Container(height: 1.5, color: Colors.redAccent.withOpacity(0.6))),\n      ]),
+        Expanded(child: Container(height: 1.5, color: Colors.redAccent.withOpacity(0.6))),
+      ]),
     );
   }
 
