@@ -58,15 +58,36 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         setState(() => _rooms = {for (var r in rooms) r.id!: r}));
   }
 
+  // Genera un colore deterministico e unico basato sull'ID utente
+  // Usato come fallback se l'utente non ha scelto un colore personalizzato
+  Color _generateUserColor(String uid) {
+    final hash = uid.hashCode;
+    final r = (hash & 0xFF0000) >> 16;
+    final g = (hash & 0x00FF00) >> 8;
+    final b = (hash & 0x0000FF);
+    return Color.fromARGB(255, r, g, b).withOpacity(1.0);
+  }
+
   Future<void> _loadUsers() async {
     final snap = await _db.collection('users').get();
     final c = <String, Color>{};
     final n = <String, String>{};
     for (final doc in snap.docs) {
       final d = doc.data();
-      final hex = d['personaColor']?.toString().replaceAll('#', '') ?? '607D8B';
-      try { c[doc.id] = Color(int.parse('FF$hex', radix: 16)); }
-      catch (_) { c[doc.id] = Colors.blueGrey; }
+      // Se esiste 'personaColor' (scelto dall'utente), usa quello.
+      // Altrimenti genera un colore unico basato sull'ID.
+      // NON usa più logiche legate al ruolo.
+      if (d['personaColor'] != null && d['personaColor'].toString().isNotEmpty) {
+        final hex = d['personaColor'].toString().replaceAll('#', '');
+        try {
+          c[doc.id] = Color(int.parse('FF$hex', radix: 16));
+        } catch (_) {
+          c[doc.id] = _generateUserColor(doc.id);
+        }
+      } else {
+         c[doc.id] = _generateUserColor(doc.id);
+      }
+      
       n[doc.id] = d['displayName']?.toString() ?? d['email']?.toString() ?? 'Utente';
     }
     setState(() { _userColors = c; _userNames = n; });
@@ -82,7 +103,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     setState(() => _clientNames = m);
   }
 
-  Color  _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
+  Color  _uColor(String uid) => _userColors[uid] ?? _generateUserColor(uid);
   String _cName(String cid)  => _clientNames[cid] ?? '';
 
   Color _rColor(String? id) {
@@ -377,8 +398,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                           ? primary.withOpacity(0.02)
                                           : Colors.white,
                                       border: Border(
-                                        top:  BorderSide(color: Colors.grey.shade200),
-                                        left: BorderSide(color: Colors.grey.shade200),
+                                        top:  BorderSide(color: Colors.grey.shade200),\n                                        left: BorderSide(color: Colors.grey.shade200),
                                       ),
                                     ),
                                   ),
@@ -489,8 +509,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                   ),
                                 );
                               }),
-                            ],
-                          ),
+                            ],\n                          ),
                         ),
                       );
                     }),
@@ -521,8 +540,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
             ]
           ),
         ),
-        Expanded(child: Container(height: 1.5, color: Colors.redAccent.withOpacity(0.6))),
-      ]),
+        Expanded(child: Container(height: 1.5, color: Colors.redAccent.withOpacity(0.6))),\n      ]),
     );
   }
 
