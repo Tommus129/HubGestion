@@ -142,8 +142,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   }
 
   // ── Card content ────────────────────────────────────────────────────────
-  // OverflowBox assicura 0 errori di layout per i bottom overflow.
-  // Layout "Smart": riga singola per 30 min, colonna per appuntamenti >= 1 ora.
+  // maxWidth: infinity & maxHeight: infinity prevengono QUALSIASI errore visivo 
+  // su schermi molto stretti. Tutto ciò che esce viene brutalmente "clippato" dal genitore.
   Widget _aptContent({
     required Appointment apt,
     required double cardH,
@@ -157,25 +157,26 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final timeText = n >= 3 ? apt.oraInizio : '${apt.oraInizio} - ${apt.oraFine}';
     final roomName = room?.name.toUpperCase() ?? 'N/A';
     
-    // Mostriamo il nome cliente se c'è, altrimenti il titolo generico
     final titleToDisplay = (canSee && clienteNome.isNotEmpty) ? clienteNome : apt.titolo;
 
     return OverflowBox(
       alignment: Alignment.topLeft,
       maxHeight: double.infinity,
+      maxWidth: double.infinity, // ✅ Fix DEFINITIVO per il "RIGHT OVERFLOWED"
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: isShort
             // ── LAYOUT 30 MINUTI (Tutto su una riga) ──
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min, // Non forzare espansione se non c'è spazio
                 children: [
                   Text(
                     apt.oraInizio,
                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.black87),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
+                  const SizedBox(width: 4),
+                  Flexible( // Usa Flexible invece di Expanded per evitare errori se c'è pochissimo spazio
                     child: Text(
                       titleToDisplay,
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
@@ -186,7 +187,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                   if (canSee && room != null && n < 2) ...[
                     const SizedBox(width: 4),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
                       decoration: BoxDecoration(
                         color: rColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(4),
@@ -194,6 +195,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                       child: Text(
                         roomName,
                         style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: rColor),
+                        maxLines: 1,
                       ),
                     ),
                   ]
@@ -206,28 +208,26 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                 children: [
                   // Prima riga: Orario + Icone pagamenti
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         timeText,
                         style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.black54),
                       ),
-                      if (canSee && n <= 2)
-                        Row(
-                          children: [
-                            Icon(
-                              apt.fatturato ? Icons.receipt_long : Icons.receipt_long_outlined,
-                              size: 10,
-                              color: apt.fatturato ? Colors.orange.shade700 : Colors.black26,
-                            ),
-                            const SizedBox(width: 2),
-                            Icon(
-                              apt.pagato ? Icons.check_circle : Icons.cancel,
-                              size: 10,
-                              color: apt.pagato ? Colors.green.shade600 : Colors.black26,
-                            ),
-                          ],
+                      if (canSee && n <= 2) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          apt.fatturato ? Icons.receipt_long : Icons.receipt_long_outlined,
+                          size: 10,
+                          color: apt.fatturato ? Colors.orange.shade700 : Colors.black26,
                         ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          apt.pagato ? Icons.check_circle : Icons.cancel,
+                          size: 10,
+                          color: apt.pagato ? Colors.green.shade600 : Colors.black26,
+                        ),
+                      ]
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -236,22 +236,20 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     titleToDisplay,
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black87),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    overflow: TextOverflow.ellipsis, // Il text overflow viene gestito prima dell'OverflowBox
                   ),
                   const SizedBox(height: 3),
                   // Stanza e Prezzo
                   if (canSee && room != null)
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.meeting_room, size: 9, color: rColor),
                         const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            roomName,
-                            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: rColor),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        Text(
+                          roomName,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: rColor),
+                          maxLines: 1,
                         ),
                         if (n == 1) ...[
                           const SizedBox(width: 4),
@@ -449,8 +447,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                     child: Container(
                                       clipBehavior: Clip.hardEdge,
                                       decoration: BoxDecoration(
-                                        color: uColor.withOpacity(0.15), // Colore utente come sfondo soft
-                                        borderRadius: BorderRadius.circular(6), // Angoli arrotondati e moderni
+                                        color: uColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
                                         boxShadow: [
                                           BoxShadow(
                                             color: uColor.withOpacity(0.2),
@@ -462,11 +460,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                       child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
-                                          // Barra laterale della stanza (più spessa e con bordo arrotondato a sinistra)
+                                          // Barra stanza
                                           Container(
                                             width: 4, 
                                             decoration: BoxDecoration(
-                                              color: rColor, // Colore STANZA super evidente
+                                              color: rColor,
                                               borderRadius: const BorderRadius.only(
                                                 topLeft: Radius.circular(6),
                                                 bottomLeft: Radius.circular(6),
