@@ -156,7 +156,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     }).toList();
   }
 
-  // ── Contenuto card adattivo in base ai pixel disponibili ─────────────────
+  // ── Contenuto card adattivo ───────────────────────────────────────
   Widget _aptContent({
     required Appointment apt,
     required double h,
@@ -168,11 +168,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     required bool canSee,
     required String clienteNome,
   }) {
-    // Padding verticale adattivo: meno spazio per card piccole
     final vPad  = h < 32 ? 1.0 : (h < 48 ? 2.0 : 3.0);
     final avail = h - vPad * 2;
 
-    // Altezze stimate ridotte per stare nel budget
     const double rowOrario  = 11.0;
     const double rowTitolo  = 13.0;
     const double rowStanza  = 11.0;
@@ -181,9 +179,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     const double rowBadge   = 13.0;
     const double gap        = 1.0;
 
-
     double used = 0;
-
     bool show(double rowH) {
       if (used + rowH + gap > avail) return false;
       used += rowH + gap;
@@ -197,73 +193,81 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final showTariffa = canSee && n == 1 && show(rowTariffa);
     final showBadge   = canSee && n <= 2 && show(rowBadge);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 3, vertical: vPad),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showOrario)
-            Text(
-              n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
-              style: TextStyle(
-                fontSize: n >= 3 ? 8 : 10,
-                color: Colors.black54,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.clip,
-            ),
-          if (showTitolo)
-            Text(
-              apt.titolo,
-              style: TextStyle(
-                fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 12),
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-                height: 1.1,
-              ),
-              maxLines: n >= 3 ? 1 : 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          if (showStanza)
-            Row(children: [
-              Container(
-                width: 6, height: 6,
-                margin: const EdgeInsets.only(right: 2),
-                decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
-              ),
-              Expanded(child: Text(
-                room!.name,
-                style: TextStyle(fontSize: 9, color: rColor, fontWeight: FontWeight.w700),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-              )),
-            ]),
-          if (showCliente)
-            Row(children: [
-              const Icon(Icons.person, size: 8, color: Colors.black38),
-              const SizedBox(width: 2),
-              Expanded(child: Text(
-                clienteNome,
-                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w600),
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-              )),
-            ]),
-          if (showTariffa)
-            Text(
-              '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-              style: const TextStyle(fontSize: 8, color: Colors.black38, fontWeight: FontWeight.w500),
-              maxLines: 1, overflow: TextOverflow.ellipsis,
-            ),
-          if (showBadge)
-            Row(children: [
-              _badge(apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
-                     apt.fatturato ? Colors.orange : Colors.grey),
-              const SizedBox(width: 2),
-              _badge(apt.pagato ? 'Pag.✓' : 'Pag.✗',
-                     apt.pagato ? Colors.green : Colors.grey),
-            ]),
-        ],
+    // ✅ Avvolgiamo tutto in SizedBox con altezza esatta + ClipRect
+    // Questo impedisce QUALSIASI overflow del contenuto interno,
+    // indipendentemente da quanto sia piccola la card.
+    return SizedBox(
+      height: h,
+      child: ClipRect(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 3, vertical: vPad),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showOrario)
+                Text(
+                  n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
+                  style: TextStyle(
+                    fontSize: n >= 3 ? 8 : 10,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                ),
+              if (showTitolo)
+                Text(
+                  apt.titolo,
+                  style: TextStyle(
+                    fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 12),
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                    height: 1.1,
+                  ),
+                  maxLines: n >= 3 ? 1 : 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              if (showStanza)
+                Row(children: [
+                  Container(
+                    width: 6, height: 6,
+                    margin: const EdgeInsets.only(right: 2),
+                    decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
+                  ),
+                  Expanded(child: Text(
+                    room!.name,
+                    style: TextStyle(fontSize: 9, color: rColor, fontWeight: FontWeight.w700),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  )),
+                ]),
+              if (showCliente)
+                Row(children: [
+                  const Icon(Icons.person, size: 8, color: Colors.black38),
+                  const SizedBox(width: 2),
+                  Expanded(child: Text(
+                    clienteNome,
+                    style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w600),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                  )),
+                ]),
+              if (showTariffa)
+                Text(
+                  '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
+                  style: const TextStyle(fontSize: 8, color: Colors.black38, fontWeight: FontWeight.w500),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+              if (showBadge)
+                Row(children: [
+                  _badge(apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+                         apt.fatturato ? Colors.orange : Colors.grey),
+                  const SizedBox(width: 2),
+                  _badge(apt.pagato ? 'Pag.✓' : 'Pag.✗',
+                         apt.pagato ? Colors.green : Colors.grey),
+                ]),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -363,8 +367,12 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
                       return SizedBox(
                         width: dw, height: totalH,
+                        // ✅ clipBehavior: Clip.hardEdge sullo Stack del giorno
+                        // taglia tutto ciò che sporge oltre totalH
                         child: ClipRect(
-                          child: Stack(children: [
+                          child: Stack(
+                            clipBehavior: Clip.hardEdge,
+                            children: [
 
                             // Griglia
                             ...List.generate(_end - _start, (i) =>
@@ -409,14 +417,12 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
                             // Appuntamenti
                             ...dayApts.map((apt) {
-                              final key    = apt.id ?? apt.titolo;
-                              final col    = layout[key] ?? _ColLayout(0, 1);
-                              final top    = _topOf(apt.oraInizio).clamp(0.0, totalH - 24.0);
-                              // ✅ FIX: hMax ridotto di 1px per evitare bottom overflow
-                              // su appuntamenti brevi (es. 30 min) a fine griglia
-                              final hRaw   = _hOf(apt.oraInizio, apt.oraFine);
-                              final hMax   = (totalH - top - 1.0).clamp(22.0, totalH);
-                              final h      = hRaw.clamp(22.0, hMax);
+                              final key     = apt.id ?? apt.titolo;
+                              final col     = layout[key] ?? _ColLayout(0, 1);
+                              final top     = _topOf(apt.oraInizio).clamp(0.0, totalH - 22.0);
+                              final hRaw    = _hOf(apt.oraInizio, apt.oraFine);
+                              // ✅ FIX DEFINITIVO: top + h non supera mai totalH
+                              final h       = hRaw.clamp(22.0, totalH - top);
 
                               final uColor = _uColor(apt.userId);
                               final rColor = _rColor(apt.roomId);
@@ -425,17 +431,17 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               final canSee = isMine || (me?.isAdmin ?? false);
                               final clienteNome = canSee ? _cName(apt.clientId) : '';
 
-                              final gap2   = 2.0;
-                              final colW   = (dw - gap2 * (col.total + 1)) / col.total;
+                              final gap2    = 2.0;
+                              final colW    = (dw - gap2 * (col.total + 1)) / col.total;
                               final leftPos = gap2 + col.index * (colW + gap2);
-                              final n      = col.total;
+                              final n       = col.total;
 
                               return Positioned(
                                 top: top, left: leftPos, width: colW, height: h,
                                 child: GestureDetector(
                                   onTap: () => widget.onTapAppointment(apt),
+                                  // ✅ Container con overflow nascosto a livello di card
                                   child: Container(
-                                    // ✅ clipBehavior: taglia fisicamente tutto ciò che sfora
                                     clipBehavior: Clip.hardEdge,
                                     decoration: BoxDecoration(
                                       color: uColor.withOpacity(0.15),
@@ -443,14 +449,15 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                       border: Border.all(color: uColor, width: 1.5),
                                     ),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Barra stanza
-                                        Container(
-                                          width: 4,
-                                          color: rColor,
+                                        // Barra stanza: altezza fissa = h
+                                        SizedBox(
+                                          width: 4, height: h,
+                                          child: Container(color: rColor),
                                         ),
-                                        // Contenuto adattivo
+                                        // Contenuto: SizedBox con h esatta + ClipRect
+                                        // impedisce overflow del Column interno
                                         Expanded(
                                           child: _aptContent(
                                             apt: apt,
