@@ -161,24 +161,26 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     required Appointment apt,
     required double h,
     required double w,
-    required int n,          // numero colonne sovrapposte
+    required int n,
     required Color uColor,
     required Color rColor,
     required Room? room,
     required bool canSee,
     required String clienteNome,
   }) {
-    // px disponibili al netto di padding (3+3 verticale)
-    final avail = h - 6;
+    // Padding verticale adattivo: meno spazio per card piccole
+    final vPad  = h < 32 ? 1.0 : (h < 48 ? 2.0 : 3.0);
+    final avail = h - vPad * 2;
 
-    // altezze stimate per riga
-    const double rowOrario  = 13;
-    const double rowTitolo  = 15;
-    const double rowStanza  = 12;
-    const double rowCliente = 12;
-    const double rowTariffa = 11;
-    const double rowBadge   = 14;
-    const double gap        = 1;
+    // Altezze stimate ridotte per stare nel budget
+    const double rowOrario  = 11.0;
+    const double rowTitolo  = 13.0;
+    const double rowStanza  = 11.0;
+    const double rowCliente = 11.0;
+    const double rowTariffa = 10.0;
+    const double rowBadge   = 13.0;
+    const double gap        = 1.0;
+
 
     double used = 0;
 
@@ -196,7 +198,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final showBadge   = canSee && n <= 2 && show(rowBadge);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+      padding: EdgeInsets.symmetric(horizontal: 3, vertical: vPad),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -413,7 +415,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               // ✅ h minima 24px — mai negativa
                               final hRaw   = _hOf(apt.oraInizio, apt.oraFine);
                               final hMax   = totalH - top;
-                              final h      = hRaw.clamp(24.0, hMax);
+                              final h      = hRaw.clamp(22.0, hMax);
 
                               final uColor = _uColor(apt.userId);
                               final rColor = _rColor(apt.roomId);
