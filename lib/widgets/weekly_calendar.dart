@@ -362,6 +362,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                   child: Column(
                                                     crossAxisAlignment: CrossAxisAlignment.start,
                                                     mainAxisSize: MainAxisSize.min,
+                                                    children: [].followedBy([
                                                     children: [
                                                       Text(
                                                         n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
@@ -412,20 +413,25 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                                           overflow: TextOverflow.ellipsis, maxLines: 1,
                                                         ),
                                                       if (canSee && h > sogliaBadge)
-                                                        Padding(
-                                                          padding: EdgeInsets.only(top: 3),
-                                                          child: Row(children: [
-                                                            Flexible(child: _badge(
-                                                              apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
-                                                              apt.fatturato ? Colors.orange : Colors.grey,
-                                                            )),
-                                                            SizedBox(width: 2),
-                                                            Flexible(child: _badge(
-                                                              apt.pagato ? 'Pag.✓' : 'Pag.✗',
-                                                              apt.pagato ? Colors.green : Colors.grey,
-                                                            )),
-                                                          ]),
-                                                        ),
+  Padding(
+    padding: EdgeInsets.only(top: 2),
+    child: Wrap(
+      spacing: 2,
+      runSpacing: 2,
+      children: [
+        _badge(
+          apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+          apt.fatturato ? Colors.orange : Colors.grey,
+        ),
+        _badge(
+          apt.pagato ? 'Pag.✓' : 'Pag.✗',
+          apt.pagato ? Colors.green : Colors.grey,
+        ),
+      ],
+    ),
+  ),
+
+                                                          ),
                                                     ],
                                                   ),
                                                 ),
@@ -501,5 +507,8 @@ class _ColLayout {
   final int total;
   const _ColLayout(this.index, this.total);
 }
+
+
+
 
 
