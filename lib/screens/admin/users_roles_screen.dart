@@ -8,6 +8,25 @@ import '../../widgets/app_drawer.dart';
 class UsersRolesScreen extends StatelessWidget {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Una palette di colori belli ed eleganti tra cui scegliere
+  final List<Color> _availableColors = [
+    Colors.red.shade400,
+    Colors.pink.shade400,
+    Colors.purple.shade400,
+    Colors.deepPurple.shade400,
+    Colors.indigo.shade400,
+    Colors.blue.shade400,
+    Colors.lightBlue.shade400,
+    Colors.cyan.shade400,
+    Colors.teal.shade400,
+    Colors.green.shade400,
+    Colors.lightGreen.shade400,
+    Colors.orange.shade400,
+    Colors.deepOrange.shade400,
+    Colors.brown.shade400,
+    Colors.blueGrey.shade400,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
@@ -36,7 +55,19 @@ class UsersRolesScreen extends StatelessWidget {
             itemBuilder: (context, i) {
               final user = users[i];
               final isCurrentUser = user.uid == currentUser?.uid;
-              final isSuperAdmin = user.role == 'superadmin';
+              final isSuperAdmin = currentUser?.role == 'superadmin';
+
+              // Colore utente (salvato o hash)
+              Color userColor;
+              if (user.personaColor != null && user.personaColor!.isNotEmpty) {
+                try {
+                  userColor = Color(int.parse('FF${user.personaColor!.replaceAll('#', '')}', radix: 16));
+                } catch (_) {
+                  userColor = _generateUserColor(user.uid);
+                }
+              } else {
+                userColor = _generateUserColor(user.uid);
+              }
 
               return Card(
                 margin: EdgeInsets.only(bottom: 10),
@@ -44,14 +75,34 @@ class UsersRolesScreen extends StatelessWidget {
                   padding: EdgeInsets.all(12),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: _roleColor(user.role, primary),
-                        child: Text(
-                          (user.displayName ?? user.email).isNotEmpty ? (user.displayName ?? user.email)[0].toUpperCase() : 'U',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      // Avatar cliccabile per cambiare colore (se admin o se stessi)
+                      GestureDetector(
+                        onTap: isSuperAdmin ? () => _changeUserColor(context, user) : null,
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: userColor,
+                              radius: 24,
+                              child: Text(
+                                (user.displayName ?? user.email).isNotEmpty ? (user.displayName ?? user.email)[0].toUpperCase() : 'U',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+                              ),
+                            ),
+                            if (isSuperAdmin)
+                              Container(
+                                padding: EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.grey.shade300)
+                                ),
+                                child: Icon(Icons.palette, size: 12, color: Colors.black87),
+                              ),
+                          ],
                         ),
                       ),
-                      SizedBox(width: 12),
+                      SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,7 +122,9 @@ class UsersRolesScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (isSuperAdmin || isCurrentUser)
+                      
+                      // Gestione Ruolo
+                      if (user.role == 'superadmin' || !isSuperAdmin)
                         Container(
                           padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
@@ -114,6 +167,67 @@ class UsersRolesScreen extends StatelessWidget {
       case 'superadmin': return Colors.purple;
       case 'presidente': return primary;
       default: return Colors.blueGrey;
+    }
+  }
+
+  Color _generateUserColor(String uid) {
+    final hash = uid.hashCode;
+    final r = (hash & 0xFF0000) >> 16;
+    final g = (hash & 0x00FF00) >> 8;
+    final b = (hash & 0x0000FF);
+    return Color.fromARGB(255, r, g, b).withOpacity(1.0);
+  }
+
+  // Dialog per cambiare colore
+  Future<void> _changeUserColor(BuildContext context, UfficioUser user) async {
+    final selectedColor = await showDialog<Color>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Scegli il colore di ${user.displayName ?? "questo utente"}'),
+          content: Container(
+            width: double.maxFinite,
+            child: GridView.builder(
+              shrinkWrap: true,
+              itemCount: _availableColors.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 5,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                final color = _availableColors[index];
+                return GestureDetector(
+                  onTap: () => Navigator.of(context).pop(color),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Annulla'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        );
+      }
+    );
+
+    if (selectedColor != null) {
+      // Salva come stringa HEX
+      final hex = selectedColor.value.toRadixString(16).substring(2).toUpperCase();
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'personaColor': '#$hex',
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Colore aggiornato con successo!')),
+      );
     }
   }
 
