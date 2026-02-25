@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/appointment.dart';
 import '../models/client.dart';
 import '../models/room.dart';
@@ -22,6 +23,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   final AppointmentService _aptService = AppointmentService();
   Client? _client;
   Room? _room;
+  String? _creatorName;
 
   @override
   void initState() {
@@ -32,12 +34,25 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   Future<void> _loadDetails() async {
     ClientService().getClients(includeArchived: true).listen((clients) {
       final match = clients.where((c) => c.id == widget.appointment.clientId);
-      if (match.isNotEmpty) setState(() => _client = match.first);
+      if (match.isNotEmpty && mounted) setState(() => _client = match.first);
     });
     RoomService().getRooms().listen((rooms) {
       final match = rooms.where((r) => r.id == widget.appointment.roomId);
-      if (match.isNotEmpty) setState(() => _room = match.first);
+      if (match.isNotEmpty && mounted) setState(() => _room = match.first);
     });
+
+    // Recupera il nome del creatore (utente)
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.appointment.userId).get();
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        setState(() {
+          _creatorName = data?['displayName'] ?? data?['email'] ?? 'Utente sconosciuto';
+        });
+      }
+    } catch (e) {
+      // Ignore
+    }
   }
 
   Future<void> _toggleFatturato() async {
@@ -139,6 +154,15 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                       SizedBox(width: 6),
                       Text('${apt.oraInizio} - ${apt.oraFine}',
                           style: TextStyle(color: Colors.grey)),
+                    ]),
+                    SizedBox(height: 12),
+                    Divider(height: 1),
+                    SizedBox(height: 12),
+                    Row(children: [
+                      Icon(Icons.person_pin, size: 16, color: primary),
+                      SizedBox(width: 6),
+                      Text('Creato da: ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      Text(_creatorName ?? 'Caricamento...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     ]),
                   ],
                 ),
