@@ -36,12 +36,12 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   final double _hourH = 64.0;
   final double _timeW = 52.0;
   final int _start = 7;
-  final int _end = 22;
+  final int _end   = 22;
 
-  Map<String, Color> _userColors = {};
-  Map<String, String> _userNames = {};
+  Map<String, Color>  _userColors  = {};
+  Map<String, String> _userNames   = {};
   Map<String, String> _clientNames = {};
-  Map<String, Room> _rooms = {};
+  Map<String, Room>   _rooms       = {};
 
   List<DateTime> get _days {
     final mon = widget.focusedWeek
@@ -84,16 +84,15 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Color _darker(Color c, double amount) {
     final a = amount.clamp(0.0, 1.0);
-    return Color.fromARGB(
-      c.alpha,
-      (c.red * (1 - a)).round(),
+    return Color.fromARGB(c.alpha,
+      (c.red   * (1 - a)).round(),
       (c.green * (1 - a)).round(),
-      (c.blue * (1 - a)).round(),
+      (c.blue  * (1 - a)).round(),
     );
   }
 
-  Color _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
-  String _cName(String cid) => _clientNames[cid] ?? '';
+  Color  _uColor(String uid) => _userColors[uid] ?? Colors.blueGrey;
+  String _cName(String cid)  => _clientNames[cid] ?? '';
 
   Color _rColor(String? id) {
     if (id == null || !_rooms.containsKey(id)) return Colors.grey;
@@ -114,6 +113,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final diff = (int.parse(ep[0]) * 60 + int.parse(ep[1])) -
                  (int.parse(sp[0]) * 60 + int.parse(sp[1]));
     return (diff.clamp(15, 900) / 60.0) * _hourH;
+  }
+
+  int _toMin(String t) {
+    final p = t.split(':');
+    return int.parse(p[0]) * 60 + int.parse(p[1]);
+  }
+
+  bool _overlaps(Appointment a, Appointment b) {
+    return _toMin(a.oraInizio) < _toMin(b.oraFine) &&
+           _toMin(a.oraFine)   > _toMin(b.oraInizio);
   }
 
   Map<String, _ColLayout> _computeLayout(List<Appointment> apts) {
@@ -138,31 +147,130 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     return result;
   }
 
-  bool _overlaps(Appointment a, Appointment b) {
-    final s1 = _toMin(a.oraInizio); final e1 = _toMin(a.oraFine);
-    final s2 = _toMin(b.oraInizio); final e2 = _toMin(b.oraFine);
-    return s1 < e2 && e1 > s2;
-  }
-
-  int _toMin(String t) {
-    final p = t.split(':');
-    return int.parse(p[0]) * 60 + int.parse(p[1]);
-  }
-
   List<Appointment> _applyFilters(List<Appointment> apts) {
     return apts.where((a) {
-      if (widget.filterUserId != null && a.userId != widget.filterUserId) return false;
-      if (widget.filterRoomId != null && a.roomId != widget.filterRoomId) return false;
+      if (widget.filterUserId   != null && a.userId   != widget.filterUserId)   return false;
+      if (widget.filterRoomId   != null && a.roomId   != widget.filterRoomId)   return false;
       if (widget.filterClientId != null && a.clientId != widget.filterClientId) return false;
       return true;
     }).toList();
   }
 
+  // ── Contenuto card adattivo in base ai pixel disponibili ─────────────────
+  Widget _aptContent({
+    required Appointment apt,
+    required double h,
+    required double w,
+    required int n,          // numero colonne sovrapposte
+    required Color uColor,
+    required Color rColor,
+    required Room? room,
+    required bool canSee,
+    required String clienteNome,
+  }) {
+    // px disponibili al netto di padding (3+3 verticale)
+    final avail = h - 6;
+
+    // altezze stimate per riga
+    const double rowOrario  = 13;
+    const double rowTitolo  = 15;
+    const double rowStanza  = 12;
+    const double rowCliente = 12;
+    const double rowTariffa = 11;
+    const double rowBadge   = 14;
+    const double gap        = 1;
+
+    double used = 0;
+
+    bool show(double rowH) {
+      if (used + rowH + gap > avail) return false;
+      used += rowH + gap;
+      return true;
+    }
+
+    final showOrario  = show(rowOrario);
+    final showTitolo  = showOrario && show(rowTitolo);
+    final showStanza  = room != null && canSee && show(rowStanza);
+    final showCliente = canSee && clienteNome.isNotEmpty && show(rowCliente);
+    final showTariffa = canSee && n == 1 && show(rowTariffa);
+    final showBadge   = canSee && n <= 2 && show(rowBadge);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showOrario)
+            Text(
+              n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
+              style: TextStyle(
+                fontSize: n >= 3 ? 8 : 10,
+                color: Colors.black54,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+            ),
+          if (showTitolo)
+            Text(
+              apt.titolo,
+              style: TextStyle(
+                fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 12),
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+                height: 1.1,
+              ),
+              maxLines: n >= 3 ? 1 : 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          if (showStanza)
+            Row(children: [
+              Container(
+                width: 6, height: 6,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
+              ),
+              Expanded(child: Text(
+                room!.name,
+                style: TextStyle(fontSize: 9, color: rColor, fontWeight: FontWeight.w700),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              )),
+            ]),
+          if (showCliente)
+            Row(children: [
+              const Icon(Icons.person, size: 8, color: Colors.black38),
+              const SizedBox(width: 2),
+              Expanded(child: Text(
+                clienteNome,
+                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w600),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+              )),
+            ]),
+          if (showTariffa)
+            Text(
+              '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 8, color: Colors.black38, fontWeight: FontWeight.w500),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+            ),
+          if (showBadge)
+            Row(children: [
+              _badge(apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
+                     apt.fatturato ? Colors.orange : Colors.grey),
+              const SizedBox(width: 2),
+              _badge(apt.pagato ? 'Pag.✓' : 'Pag.✗',
+                     apt.pagato ? Colors.green : Colors.grey),
+            ]),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final totalH = (_end - _start) * _hourH;
-    final auth = Provider.of<AuthService>(context);
-    final me = auth.currentUser;
+    final auth    = Provider.of<AuthService>(context);
+    final me      = auth.currentUser;
     final primary = Theme.of(context).colorScheme.primary;
 
     return StreamBuilder<List<Appointment>>(
@@ -185,7 +293,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                   decoration: BoxDecoration(
                     color: today ? primary.withOpacity(0.07) : Colors.white,
                     border: Border(
-                      left: BorderSide(color: Colors.grey.shade200),
+                      left:   BorderSide(color: Colors.grey.shade200),
                       bottom: BorderSide(color: Colors.grey.shade300),
                     ),
                   ),
@@ -193,11 +301,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(_dn(d.weekday), style: TextStyle(
-                        fontSize: 10, letterSpacing: 0.8,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 10, letterSpacing: 0.8, fontWeight: FontWeight.w700,
                         color: today ? primary : Colors.grey.shade500,
                       )),
-                      SizedBox(height: 3),
+                      const SizedBox(height: 3),
                       Container(
                         width: 28, height: 28,
                         decoration: BoxDecoration(
@@ -216,7 +323,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
               }),
             ]),
 
-            // ── CORPO SCROLLABILE ────────────────────────────────
+            // ── CORPO ───────────────────────────────────────────
             Expanded(child: SingleChildScrollView(
               child: SizedBox(
                 height: totalH,
@@ -224,9 +331,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    // COLONNA ORE
-                    Container(
-                      width: _timeW, height: totalH, color: Colors.white,
+                    // Colonna ore
+                    SizedBox(
+                      width: _timeW, height: totalH,
                       child: Stack(
                         children: List.generate(_end - _start, (i) =>
                           Positioned(
@@ -240,14 +347,14 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                       ),
                     ),
 
-                    // COLONNE GIORNI
+                    // Colonne giorni
                     ..._days.map((d) {
-                      final today = _isToday(d);
+                      final today   = _isToday(d);
                       final dayApts = _applyFilters(
                         allApts.where((a) =>
-                          a.data.year == d.year &&
+                          a.data.year  == d.year &&
                           a.data.month == d.month &&
-                          a.data.day == d.day
+                          a.data.day   == d.day
                         ).toList(),
                       );
                       final layout = _computeLayout(dayApts);
@@ -255,197 +362,112 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                       return SizedBox(
                         width: dw, height: totalH,
                         child: ClipRect(
-                          child: Stack(
-                            children: [
+                          child: Stack(children: [
 
-                              // SFONDO + GRIGLIA
-                              ...List.generate(_end - _start, (i) =>
-                                Positioned(
-                                  top: i * _hourH, left: 0, right: 0, height: _hourH,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: today ? primary.withOpacity(0.02) : Colors.white,
-                                      border: Border(
-                                        top: BorderSide(color: Colors.grey.shade200),
-                                        left: BorderSide(color: Colors.grey.shade200),
-                                      ),
+                            // Griglia
+                            ...List.generate(_end - _start, (i) =>
+                              Positioned(
+                                top: i * _hourH, left: 0, right: 0, height: _hourH,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: today ? primary.withOpacity(0.02) : Colors.white,
+                                    border: Border(
+                                      top:  BorderSide(color: Colors.grey.shade200),
+                                      left: BorderSide(color: Colors.grey.shade200),
                                     ),
                                   ),
                                 ),
                               ),
+                            ),
 
-                              // LINEA MEZZ'ORA
-                              ...List.generate(_end - _start, (i) =>
-                                Positioned(
-                                  top: i * _hourH + _hourH / 2,
-                                  left: 4, right: 0, height: 1,
-                                  child: Container(color: Colors.grey.shade100),
+                            // Linee mezz'ora
+                            ...List.generate(_end - _start, (i) =>
+                              Positioned(
+                                top: i * _hourH + _hourH / 2,
+                                left: 4, right: 0, height: 1,
+                                child: Container(color: Colors.grey.shade100),
+                              ),
+                            ),
+
+                            // Tap slot vuoto
+                            ...List.generate(_end - _start, (i) =>
+                              Positioned(
+                                top: i * _hourH, left: 0, right: 0, height: _hourH,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onTap: () => widget.onTapSlot(
+                                      DateTime(d.year, d.month, d.day, _start + i)),
+                                  child: const SizedBox.expand(),
                                 ),
                               ),
+                            ),
 
-                              // AREA TAP VUOTA
-                              ...List.generate(_end - _start, (i) =>
-                                Positioned(
-                                  top: i * _hourH, left: 0, right: 0, height: _hourH,
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onTap: () => widget.onTapSlot(DateTime(
-                                        d.year, d.month, d.day, _start + i)),
-                                    child: SizedBox.expand(),
-                                  ),
-                                ),
-                              ),
+                            // Linea ora corrente
+                            if (today) _buildNowLine(primary),
 
-                              // LINEA ORA CORRENTE
-                              if (today) _buildNowLine(primary),
+                            // Appuntamenti
+                            ...dayApts.map((apt) {
+                              final key    = apt.id ?? apt.titolo;
+                              final col    = layout[key] ?? _ColLayout(0, 1);
+                              final top    = _topOf(apt.oraInizio).clamp(0.0, totalH - 24.0);
+                              // ✅ h minima 24px — mai negativa
+                              final hRaw   = _hOf(apt.oraInizio, apt.oraFine);
+                              final hMax   = totalH - top;
+                              final h      = hRaw.clamp(24.0, hMax);
 
-                              // ── APPUNTAMENTI ──────────────────
-                              ...dayApts.map((apt) {
-                                final key = apt.id ?? apt.titolo;
-                                final col = layout[key] ?? _ColLayout(0, 1);
-                                final top = _topOf(apt.oraInizio).clamp(0.0, totalH - 26.0);
-                                final h = _hOf(apt.oraInizio, apt.oraFine).clamp(26.0, totalH - top);
-                                final uColor = _uColor(apt.userId);
-                                final rColor = _rColor(apt.roomId);
-                                final room = _rooms[apt.roomId];
-                                final isMine = apt.userId == me?.uid;
-                                final canSee = isMine || (me?.isAdmin ?? false);
-                                final clienteNome = canSee ? _cName(apt.clientId) : '';
+                              final uColor = _uColor(apt.userId);
+                              final rColor = _rColor(apt.roomId);
+                              final room   = _rooms[apt.roomId];
+                              final isMine = apt.userId == me?.uid;
+                              final canSee = isMine || (me?.isAdmin ?? false);
+                              final clienteNome = canSee ? _cName(apt.clientId) : '';
 
-                                final padding = 2.0;
-                                final colW = (dw - padding * (col.total + 1)) / col.total;
-                                final leftPos = padding + col.index * (colW + padding);
+                              final gap2   = 2.0;
+                              final colW   = (dw - gap2 * (col.total + 1)) / col.total;
+                              final leftPos = gap2 + col.index * (colW + gap2);
+                              final n      = col.total;
 
-                                final n = col.total;
-                                final sogliaStanza  = n >= 3 ? 999.0 : (n == 2 ? 40.0 : 44.0);
-                                final sogliaCliente = n >= 3 ? 999.0 : (n == 2 ? 56.0 : 60.0);
-                                final sogliaTariffa = n >= 3 ? 999.0 : (n == 2 ? 72.0 : 76.0);
-                                final sogliaBadge   = n >= 3 ? 999.0 : (n == 2 ? 90.0 : 92.0);
-
-                                return Positioned(
-                                  top: top, left: leftPos, width: colW, height: h,
-                                  child: GestureDetector(
-                                    onTap: () => widget.onTapAppointment(apt),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(5),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: uColor.withOpacity(0.15),
-                                            borderRadius: BorderRadius.circular(5),
-                                            border: Border.all(color: uColor, width: 1.5),
-                                          ),
-                                          child: Row(
-                                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                                            children: [
-                                              // Barra laterale colore stanza
-                                              Container(
-                                                width: 4,
-                                                decoration: BoxDecoration(
-                                                  color: rColor,
-                                                  borderRadius: BorderRadius.only(
-                                                    topLeft: Radius.circular(4),
-                                                    bottomLeft: Radius.circular(4),
-                                                  ),
-                                                ),
-                                              ),
-                                              // Contenuto — ClipRect evita overflow
-                                              Expanded(
-                                                child: ClipRect(
-                                                  child: Padding(
-                                                    padding: EdgeInsets.symmetric(horizontal: 3, vertical: 3),
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        // Orario
-                                                        Text(
-                                                          n >= 3 ? apt.oraInizio : '${apt.oraInizio}–${apt.oraFine}',
-                                                          style: TextStyle(
-                                                            fontSize: n >= 3 ? 9 : (n == 2 ? 10 : 11),
-                                                            color: Colors.black54,
-                                                            fontWeight: FontWeight.w500,
-                                                          ),
-                                                          overflow: TextOverflow.clip, maxLines: 1,
-                                                        ),
-                                                        // Titolo
-                                                        Text(
-                                                          apt.titolo,
-                                                          style: TextStyle(
-                                                            fontSize: n >= 3 ? 10 : (n == 2 ? 11 : 13),
-                                                            fontWeight: FontWeight.w700,
-                                                            color: Colors.black87, height: 1.2,
-                                                          ),
-                                                          maxLines: n >= 3 ? 1 : (n == 2 ? 1 : 2),
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
-                                                        // Stanza
-                                                        if (room != null && h > sogliaStanza)
-                                                          Row(children: [
-                                                            Container(
-                                                              width: 6, height: 6,
-                                                              margin: EdgeInsets.only(right: 3, top: 1),
-                                                              decoration: BoxDecoration(color: rColor, shape: BoxShape.circle),
-                                                            ),
-                                                            Expanded(child: Text(
-                                                              room.name,
-                                                              style: TextStyle(fontSize: 10, color: rColor, fontWeight: FontWeight.w700),
-                                                              overflow: TextOverflow.ellipsis, maxLines: 1,
-                                                            )),
-                                                          ]),
-                                                        // Cliente
-                                                        if (canSee && h > sogliaCliente && clienteNome.isNotEmpty)
-                                                          Row(children: [
-                                                            Icon(Icons.person, size: 9, color: Colors.black45),
-                                                            SizedBox(width: 2),
-                                                            Expanded(child: Text(
-                                                              clienteNome,
-                                                              style: TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.w600),
-                                                              overflow: TextOverflow.ellipsis, maxLines: 1,
-                                                            )),
-                                                          ]),
-                                                        // Tariffa
-                                                        if (canSee && h > sogliaTariffa)
-                                                          Text(
-                                                            '€${apt.tariffa.toStringAsFixed(0)}/h · €${apt.totale.toStringAsFixed(0)}',
-                                                            style: TextStyle(fontSize: 9, color: Colors.black38, fontWeight: FontWeight.w500),
-                                                            overflow: TextOverflow.ellipsis, maxLines: 1,
-                                                          ),
-                                                        // Badge Fatt/Pag — Wrap evita overflow orizzontale
-                                                        if (canSee && h > sogliaBadge)
-                                                          Padding(
-                                                            padding: EdgeInsets.only(top: 2),
-                                                            child: Wrap(
-                                                              spacing: 2,
-                                                              runSpacing: 2,
-                                                              children: [
-                                                                _badge(
-                                                                  apt.fatturato ? 'Fatt.✓' : 'Fatt.✗',
-                                                                  apt.fatturato ? Colors.orange : Colors.grey,
-                                                                ),
-                                                                _badge(
-                                                                  apt.pagato ? 'Pag.✓' : 'Pag.✗',
-                                                                  apt.pagato ? Colors.green : Colors.grey,
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
+                              return Positioned(
+                                top: top, left: leftPos, width: colW, height: h,
+                                child: GestureDetector(
+                                  onTap: () => widget.onTapAppointment(apt),
+                                  child: Container(
+                                    // ✅ clipBehavior: taglia fisicamente tutto ciò che sfora
+                                    clipBehavior: Clip.hardEdge,
+                                    decoration: BoxDecoration(
+                                      color: uColor.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(5),
+                                      border: Border.all(color: uColor, width: 1.5),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        // Barra stanza
+                                        Container(
+                                          width: 4,
+                                          color: rColor,
+                                        ),
+                                        // Contenuto adattivo
+                                        Expanded(
+                                          child: _aptContent(
+                                            apt: apt,
+                                            h: h,
+                                            w: colW - 4,
+                                            n: n,
+                                            uColor: uColor,
+                                            rColor: rColor,
+                                            room: room,
+                                            canSee: canSee,
+                                            clienteNome: clienteNome,
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
                                   ),
-                                );
-                              }),
-                            ],
-                          ),
+                                ),
+                              );
+                            }),
+                          ]),
                         ),
                       );
                     }),
@@ -461,16 +483,15 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Widget _badge(String label, Color color) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
       decoration: BoxDecoration(
         color: color.withOpacity(0.18),
         borderRadius: BorderRadius.circular(3),
         border: Border.all(color: color, width: 0.8),
       ),
-      child: Text(
-        label,
+      child: Text(label,
         style: TextStyle(
-          fontSize: 8, fontWeight: FontWeight.w700,
+          fontSize: 7, fontWeight: FontWeight.w700,
           color: color == Colors.grey ? Colors.grey.shade500 : _darker(color, 0.35),
         ),
         overflow: TextOverflow.clip, maxLines: 1,
@@ -480,7 +501,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Widget _buildNowLine(Color c) {
     final n = DateTime.now();
-    if (n.hour < _start || n.hour >= _end) return SizedBox.shrink();
+    if (n.hour < _start || n.hour >= _end) return const SizedBox.shrink();
     final top = ((n.hour - _start) + n.minute / 60.0) * _hourH;
     return Positioned(
       top: top, left: 0, right: 0,
