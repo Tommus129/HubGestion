@@ -412,9 +412,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               final key    = apt.id ?? apt.titolo;
                               final col    = layout[key] ?? _ColLayout(0, 1);
                               final top    = _topOf(apt.oraInizio).clamp(0.0, totalH - 24.0);
-                              // ✅ h minima 24px — mai negativa
+                              // ✅ FIX: hMax ridotto di 1px per evitare bottom overflow
+                              // su appuntamenti brevi (es. 30 min) a fine griglia
                               final hRaw   = _hOf(apt.oraInizio, apt.oraFine);
-                              final hMax   = totalH - top;
+                              final hMax   = (totalH - top - 1.0).clamp(22.0, totalH);
                               final h      = hRaw.clamp(22.0, hMax);
 
                               final uColor = _uColor(apt.userId);
