@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,9 @@ import '../../services/auth_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../utils/date_helpers.dart';
 
+// Download PDF su Flutter Web tramite dart:html
+import 'dart:html' as html;
+
 class ClientReportScreen extends StatefulWidget {
   @override
   _ClientReportScreenState createState() => _ClientReportScreenState();
@@ -22,6 +27,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Client? _selectedClient;
+  // Periodo per la tabella
   String _periodoType = 'mese';
   int _selectedMonth = DateTime.now().month;
   int _selectedYear  = DateTime.now().year;
@@ -29,6 +35,9 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   DateTime? _customTo;
   String _filtroFatturato = 'tutti';
   String _filtroPageto    = 'tutti';
+
+  // Filtro PDF separato: settimana / mese / tutti
+  String _pdfFiltro = 'mese';
 
   List<Client> _clients = [];
   List<Appointment> _allFetched = [];
@@ -117,44 +126,45 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   String _formatCurrency(double v) =>
       NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
 
-  // ── GENERA PDF: solo appuntamenti NON FATTURATI ──────────────────
+  // ── Calcola range per il filtro PDF ──────────────────────────────
+  (DateTime, DateTime, String) _pdfRange() {
+    final now = DateTime.now();
+    switch (_pdfFiltro) {
+      case 'settimana':
+        // Lunedì di questa settimana
+        final lunedi = now.subtract(Duration(days: now.weekday - 1));
+        final start = DateTime(lunedi.year, lunedi.month, lunedi.day);
+        final end   = start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+        final label = 'Settimana ${DateFormat('dd/MM').format(start)}–${DateFormat('dd/MM/yyyy').format(end)}';
+        return (start, end, label);
+      case 'mese':
+        final start = DateTime(now.year, now.month, 1);
+        final end   = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+        final label = '${_monthName(now.month)} ${now.year}';
+        return (start, end, label);
+      default: // tutti
+        return (DateTime(2000), DateTime(2099), 'Tutti');
+    }
+  }
+
+  // ── GENERA E SCARICA PDF ─────────────────────────────────────────
   Future<void> _generatePdf() async {
     if (_selectedClient == null) return;
 
-    // Prende TUTTI i non fatturati da _allFetched (ignora filtri UI su fatturato)
-    // ma rispetta il filtro periodo e pagato
-    DateTime start;
-    DateTime end;
-    switch (_periodoType) {
-      case 'mese':
-        start = DateTime(_selectedYear, _selectedMonth, 1);
-        end   = DateTime(_selectedYear, _selectedMonth + 1, 0, 23, 59, 59);
-        break;
-      case 'anno':
-        start = DateTime(_selectedYear, 1, 1);
-        end   = DateTime(_selectedYear, 12, 31, 23, 59, 59);
-        break;
-      case 'custom':
-        if (_customFrom == null || _customTo == null) return;
-        start = _customFrom!;
-        end   = DateTime(_customTo!.year, _customTo!.month, _customTo!.day, 23, 59, 59);
-        break;
-      default:
-        start = DateTime(2000); end = DateTime(2099);
-    }
+    final (start, end, periodoLabel) = _pdfRange();
 
     final List<Appointment> pdfData = _allFetched.where((a) {
       if (a.deleted == true) return false;
       if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
-      return !a.fatturato; // SOLO non fatturati, sempre
+      return !a.fatturato;
     }).toList()
       ..sort((a, b) => a.data.compareTo(b.data));
 
     if (pdfData.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nessun pagamento non fatturato nel periodo selezionato'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text('Nessun pagamento non fatturato ($periodoLabel)'),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -165,21 +175,12 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final totNonPagato = pdfData.where((a) => !a.pagato).fold(0.0, (s, a) => s + a.totale);
     final totPagato    = pdfData.where((a) =>  a.pagato).fold(0.0, (s, a) => s + a.totale);
 
-    String periodoLabel;
-    switch (_periodoType) {
-      case 'mese':   periodoLabel = '${_monthName(_selectedMonth)} $_selectedYear'; break;
-      case 'anno':   periodoLabel = '$_selectedYear'; break;
-      case 'custom': periodoLabel =
-          '${DateFormat('dd/MM/yyyy').format(_customFrom!)} – ${DateFormat('dd/MM/yyyy').format(_customTo!)}'; break;
-      default:       periodoLabel = 'Sempre';
-    }
-
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
-        header: (ctx) => pw.Column(
+        header: (_) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Row(
@@ -218,7 +219,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             pw.SizedBox(height: 14),
           ],
         ),
-        build: (ctx) => [
+        build: (_) => [
           pw.Table(
             border: pw.TableBorder(
               horizontalInside: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
@@ -287,12 +288,22 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       ),
     );
 
-    // Salva i byte e forza il download (funziona su web E mobile)
-    final bytes = await doc.save();
+    final Uint8List bytes = await doc.save();
     final safeName = clienteNome.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
     final fileName = 'non_fatturati_${safeName}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
 
-    await Printing.sharePdf(bytes: bytes, filename: fileName);
+    // Flutter Web: forza download tramite dart:html
+    if (kIsWeb) {
+      final blob = html.Blob([bytes], 'application/pdf');
+      final url  = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      // Mobile/Desktop: share sheet
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+    }
   }
 
   pw.Widget _pdfMetric(String label, String value, PdfColor color) =>
@@ -338,9 +349,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final primary = Theme.of(context).colorScheme.primary;
     final auth    = Provider.of<AuthService>(context);
     final isAdmin = auth.currentUser?.isAdmin ?? false;
-
-    // Bottone PDF visibile se c'e' almeno 1 appuntamento caricato (non fatturati calcolati al click)
-    final hasDati = _appointments.isNotEmpty || _allFetched.isNotEmpty;
+    final hasDati = _allFetched.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -349,7 +358,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           if (_selectedClient != null && hasDati)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Esporta PDF (non fatturati)',
+              tooltip: 'Esporta PDF non fatturati',
               onPressed: _generatePdf,
             ),
         ],
@@ -358,7 +367,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       body: Column(
         children: [
 
-          // ── PANNELLO FILTRI ────────────────────────────────────────
+          // ── PANNELLO FILTRI TABELLA ──────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -476,6 +485,27 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                     _segBtn('no', 'No', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
                   ],
                 ),
+
+                // ── FILTRO PDF ──────────────────────────────────────
+                if (_selectedClient != null && hasDati) ...[
+                  const SizedBox(height: 10),
+                  Divider(height: 1, color: Colors.grey.shade100),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf, size: 15, color: Colors.deepOrange[400]),
+                      const SizedBox(width: 6),
+                      Text('PDF non fatturati:',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 8),
+                      _pdfChip('settimana', 'Settimana'),
+                      const SizedBox(width: 6),
+                      _pdfChip('mese', 'Mese'),
+                      const SizedBox(width: 6),
+                      _pdfChip('tutti', 'Tutti'),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -565,6 +595,27 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           if (!_loading && _appointments.isNotEmpty)
             Expanded(child: _buildTable(primary, isAdmin)),
         ],
+      ),
+    );
+  }
+
+  Widget _pdfChip(String value, String label) {
+    final active = _pdfFiltro == value;
+    return GestureDetector(
+      onTap: () => setState(() => _pdfFiltro = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? Colors.deepOrange : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: active ? Colors.deepOrange : Colors.grey.shade300),
+        ),
+        child: Text(label, style: TextStyle(
+          color: active ? Colors.white : Colors.grey[700],
+          fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          fontSize: 12,
+        )),
       ),
     );
   }
