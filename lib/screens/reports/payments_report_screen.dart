@@ -121,12 +121,24 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
 
   Future<void> _generatePdf() async {
+    // ✅ Filtro PDF: SOLO pagamenti NON fatturati
+    final List<Appointment> pdfData = _filtered.where((a) => !a.fatturato).toList();
+
+    if (pdfData.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nessun pagamento non fatturato da esportare'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final periodoLabel = _periodo == 'settimana' ? 'Settimana corrente'
         : _periodo == 'mese' ? 'Mese corrente'
         : _periodo == 'anno' ? 'Anno corrente' : 'Sempre';
 
-    final fattLabel = _filtroFatturato == 'tutti' ? 'Tutti'
-        : _filtroFatturato == 'si' ? 'Fatturati' : 'Non fatturati';
+    final fattLabel = 'Non fatturati'; // sempre non fatturati nel PDF
     final pagLabel = _filtroPagato == 'tutti' ? 'Tutti'
         : _filtroPagato == 'si' ? 'Pagati' : 'Non pagati';
 
@@ -137,7 +149,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       personaLabel = _userNames[_myUid] ?? _myUid!;
     }
 
-    final totalePdf = _filtered.fold(0.0, (s, a) => s + a.totale);
+    final totalePdf = pdfData.fold(0.0, (s, a) => s + a.totale);
     final doc = pw.Document();
 
     doc.addPage(
@@ -153,7 +165,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    pw.Text('Report Pagamenti',
+                    pw.Text('Report Pagamenti - NON FATTURATI',
                         style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
                     pw.SizedBox(height: 4),
                     pw.Text('$personaLabel  •  $periodoLabel',
@@ -173,17 +185,17 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             pw.SizedBox(height: 4),
             pw.Row(
               children: [
-                _pdfMetric('Appuntamenti', '${_filtered.length}', PdfColors.blueGrey700),
+                _pdfMetric('Appuntamenti', '${pdfData.length}', PdfColors.blueGrey700),
                 pw.SizedBox(width: 12),
                 _pdfMetric('Totale', _formatCurrencyPdf(totalePdf), PdfColors.teal700),
                 pw.SizedBox(width: 12),
                 _pdfMetric('Non pagato',
-                    _formatCurrencyPdf(_filtered.where((a) => !a.pagato).fold(0.0, (s, a) => s + a.totale)),
+                    _formatCurrencyPdf(pdfData.where((a) => !a.pagato).fold(0.0, (s, a) => s + a.totale)),
                     PdfColors.red700),
                 pw.SizedBox(width: 12),
-                _pdfMetric('Non fatturato',
-                    _formatCurrencyPdf(_filtered.where((a) => !a.fatturato).fold(0.0, (s, a) => s + a.totale)),
-                    PdfColors.orange700),
+                _pdfMetric('Pagato',
+                    _formatCurrencyPdf(pdfData.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale)),
+                    PdfColors.green700),
               ],
             ),
             pw.SizedBox(height: 12),
@@ -202,13 +214,12 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               2: pw.FlexColumnWidth(1.2),
               3: pw.FlexColumnWidth(1.0),
               4: pw.FlexColumnWidth(0.8),
-              5: pw.FlexColumnWidth(0.8),
-              6: pw.FlexColumnWidth(1.1),
+              5: pw.FlexColumnWidth(1.1),
             },
             children: [
               pw.TableRow(
                 decoration: pw.BoxDecoration(color: PdfColors.grey100),
-                children: ['Titolo', 'Cliente', 'Data', 'Orario', 'Fatt.', 'Pag.', 'Importo']
+                children: ['Titolo', 'Cliente', 'Data', 'Orario', 'Pag.', 'Importo']
                     .map((h) => pw.Padding(
                           padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                           child: pw.Text(h,
@@ -219,7 +230,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                         ))
                     .toList(),
               ),
-              ..._filtered.map((a) {
+              ...pdfData.map((a) {
                 final clienteNome = _clientNames[a.clientId] ?? '—';
                 return pw.TableRow(
                   children: [
@@ -227,8 +238,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                     _pdfCell(clienteNome),
                     _pdfCell(DateFormat('dd/MM/yyyy').format(a.data)),
                     _pdfCell('${a.oraInizio}-${a.oraFine}'),
-                    _pdfCellColor(a.fatturato ? 'Si' : 'No',
-                        a.fatturato ? PdfColors.green700 : PdfColors.orange700),
                     _pdfCellColor(a.pagato ? 'Si' : 'No',
                         a.pagato ? PdfColors.green700 : PdfColors.red700),
                     _pdfCell(_formatCurrencyPdf(a.totale), bold: true),
@@ -261,7 +270,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
 
     await Printing.layoutPdf(
       onLayout: (fmt) async => doc.save(),
-      name: 'pagamenti_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+      name: 'pagamenti_non_fatturati_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
     );
   }
 
@@ -323,7 +332,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
           if (_filtered.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Esporta PDF',
+              tooltip: 'Esporta PDF (solo non fatturati)',
               onPressed: _generatePdf,
             ),
         ],
