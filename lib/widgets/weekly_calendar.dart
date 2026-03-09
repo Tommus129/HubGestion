@@ -58,8 +58,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         setState(() => _rooms = {for (var r in rooms) r.id!: r}));
   }
 
-  // Genera un colore deterministico e unico basato sull'ID utente
-  // Usato come fallback se l'utente non ha scelto un colore personalizzato
   Color _generateUserColor(String uid) {
     final hash = uid.hashCode;
     final r = (hash & 0xFF0000) >> 16;
@@ -74,9 +72,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final n = <String, String>{};
     for (final doc in snap.docs) {
       final d = doc.data();
-      // Se esiste 'personaColor' (scelto dall'utente), usa quello.
-      // Altrimenti genera un colore unico basato sull'ID.
-      // NON usa più logiche legate al ruolo.
       if (d['personaColor'] != null && d['personaColor'].toString().isNotEmpty) {
         final hex = d['personaColor'].toString().replaceAll('#', '');
         try {
@@ -85,9 +80,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
           c[doc.id] = _generateUserColor(doc.id);
         }
       } else {
-         c[doc.id] = _generateUserColor(doc.id);
+        c[doc.id] = _generateUserColor(doc.id);
       }
-      
       n[doc.id] = d['displayName']?.toString() ?? d['email']?.toString() ?? 'Utente';
     }
     setState(() { _userColors = c; _userNames = n; });
@@ -113,7 +107,20 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     } catch (_) { return Colors.grey; }
   }
 
-  /// Pixel dall'inizio griglia per un orario "HH:MM"
+  /// Restituisce la lista ordinata e deduplicata di colori per un appuntamento.
+  /// Combina userId + workerIds, rimuove duplicati, mantiene ordine.
+  List<Color> _aptColors(Appointment apt) {
+    final seen = <String>{};
+    final ids = <String>[];
+    // userId sempre primo
+    if (apt.userId.isNotEmpty && seen.add(apt.userId)) ids.add(apt.userId);
+    for (final w in apt.workerIds) {
+      if (w.isNotEmpty && seen.add(w)) ids.add(w);
+    }
+    if (ids.isEmpty) return [Colors.blueGrey.shade200];
+    return ids.map(_uColor).toList();
+  }
+
   double _topOf(String t) {
     final p = t.split(':');
     if (p.length < 2) return 0;
@@ -155,16 +162,18 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   List<Appointment> _applyFilters(List<Appointment> apts) {
     return apts.where((a) {
-      if (widget.filterUserId   != null && a.userId   != widget.filterUserId)   return false;
+      if (widget.filterUserId != null) {
+        // Mostra l'appuntamento se filterUserId è userId OPPURE è in workerIds
+        final match = a.userId == widget.filterUserId ||
+            a.workerIds.contains(widget.filterUserId);
+        if (!match) return false;
+      }
       if (widget.filterRoomId   != null && a.roomId   != widget.filterRoomId)   return false;
       if (widget.filterClientId != null && a.clientId != widget.filterClientId) return false;
       return true;
     }).toList();
   }
 
-  // ── Card content ────────────────────────────────────────────────────────
-  // maxWidth: infinity & maxHeight: infinity prevengono QUALSIASI errore visivo 
-  // su schermi molto stretti. Tutto ciò che esce viene brutalmente "clippato" dal genitore.
   Widget _aptContent({
     required Appointment apt,
     required double cardH,
@@ -174,30 +183,28 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     required bool canSee,
     required String clienteNome,
   }) {
-    final isShort = cardH < 45.0; // Se dura 30 minuti (~32px)
+    final isShort = cardH < 45.0;
     final timeText = n >= 3 ? apt.oraInizio : '${apt.oraInizio} - ${apt.oraFine}';
     final roomName = room?.name.toUpperCase() ?? 'N/A';
-    
     final titleToDisplay = (canSee && clienteNome.isNotEmpty) ? clienteNome : apt.titolo;
 
     return OverflowBox(
       alignment: Alignment.topLeft,
       maxHeight: double.infinity,
-      maxWidth: double.infinity, // ✅ Fix DEFINITIVO per il "RIGHT OVERFLOWED"
+      maxWidth: double.infinity,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: isShort
-            // ── LAYOUT 30 MINUTI (Tutto su una riga) ──
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min, // Non forzare espansione se non c'è spazio
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     apt.oraInizio,
                     style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.black87),
                   ),
                   const SizedBox(width: 4),
-                  Flexible( // Usa Flexible invece di Expanded per evitare errori se c'è pochissimo spazio
+                  Flexible(
                     child: Text(
                       titleToDisplay,
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
@@ -222,12 +229,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                   ]
                 ],
               )
-            // ── LAYOUT 1 ORA+ (Incolonnato, più pulito) ──
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Prima riga: Orario + Icone pagamenti
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -252,15 +257,13 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  // Nome Cliente (Evidente)
                   Text(
                     titleToDisplay,
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black87),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis, // Il text overflow viene gestito prima dell'OverflowBox
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 3),
-                  // Stanza e Prezzo
                   if (canSee && room != null)
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -275,7 +278,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         if (n == 1) ...[
                           const SizedBox(width: 4),
                           Text(
-                            '€${apt.totale.toStringAsFixed(0)}',
+                            'EUR ${apt.totale.toStringAsFixed(0)}',
                             style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Colors.black45),
                           ),
                         ]
@@ -442,19 +445,19 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                     .clamp(topPx + 22.0, totalH);
                                 final cardH = bottomPx - topPx;
 
-                                final uColor = _uColor(apt.userId);
-                                final rColor = _rColor(apt.roomId);
-                                final room   = _rooms[apt.roomId];
-                                final isMine = apt.userId == me?.uid;
-                                final canSee = isMine || (me?.isAdmin ?? false);
+                                final colors  = _aptColors(apt);
+                                final uColor  = colors.first; // colore principale (per ombre/bordi)
+                                final rColor  = _rColor(apt.roomId);
+                                final room    = _rooms[apt.roomId];
+                                final isMine  = apt.userId == me?.uid ||
+                                    apt.workerIds.contains(me?.uid);
+                                final canSee  = isMine || (me?.isAdmin ?? false);
                                 final clienteNome =
                                     canSee ? _cName(apt.clientId) : '';
 
-                                final gap2    = 2.0;
-                                final colW =
-                                    (dw - gap2 * (col.total + 1)) / col.total;
-                                final leftPos =
-                                    gap2 + col.index * (colW + gap2);
+                                final gap2 = 2.0;
+                                final colW = (dw - gap2 * (col.total + 1)) / col.total;
+                                final leftPos = gap2 + col.index * (colW + gap2);
                                 final n = col.total;
 
                                 return Positioned(
@@ -463,48 +466,56 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                   left:   leftPos,
                                   width:  colW,
                                   child: GestureDetector(
-                                    onTap: () =>
-                                        widget.onTapAppointment(apt),
+                                    onTap: () => widget.onTapAppointment(apt),
                                     child: Container(
                                       clipBehavior: Clip.hardEdge,
                                       decoration: BoxDecoration(
-                                        color: uColor.withOpacity(0.15),
                                         borderRadius: BorderRadius.circular(6),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: uColor.withOpacity(0.2),
+                                            color: uColor.withOpacity(0.25),
                                             blurRadius: 3,
                                             offset: const Offset(0, 1),
                                           ),
                                         ],
                                       ),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                                        children: [
-                                          // Barra stanza
-                                          Container(
-                                            width: 4, 
-                                            decoration: BoxDecoration(
-                                              color: rColor,
-                                              borderRadius: const BorderRadius.only(
-                                                topLeft: Radius.circular(6),
-                                                bottomLeft: Radius.circular(6),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            // Barra stanza a sinistra
+                                            Container(
+                                              width: 4,
+                                              decoration: BoxDecoration(
+                                                color: rColor,
+                                                borderRadius: const BorderRadius.only(
+                                                  topLeft: Radius.circular(6),
+                                                  bottomLeft: Radius.circular(6),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          // Contenuto testuale
-                                          Expanded(
-                                            child: _aptContent(
-                                              apt: apt,
-                                              cardH: cardH,
-                                              n: n,
-                                              rColor: rColor,
-                                              room: room,
-                                              canSee: canSee,
-                                              clienteNome: clienteNome,
+                                            // Background a strisce + contenuto
+                                            Expanded(
+                                              child: CustomPaint(
+                                                painter: _StripePainter(
+                                                  colors: colors,
+                                                  stripeHeight: 8.0,
+                                                  opacity: 0.18,
+                                                ),
+                                                child: _aptContent(
+                                                  apt: apt,
+                                                  cardH: cardH,
+                                                  n: n,
+                                                  rColor: rColor,
+                                                  room: room,
+                                                  canSee: canSee,
+                                                  clienteNome: clienteNome,
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -535,7 +546,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         Container(
           width: 8, height: 8,
           decoration: BoxDecoration(
-            color: Colors.redAccent, 
+            color: Colors.redAccent,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(color: Colors.redAccent.withOpacity(0.4), blurRadius: 4)
@@ -554,6 +565,58 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   String _dn(int w) =>
       ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'][w - 1];
+}
+
+// ── STRIPE PAINTER ──────────────────────────────────────────────────────────
+/// Disegna strisce orizzontali che si alternano tra i colori dei lavoratori.
+/// Con un solo colore: sfondo uniforme. Con più colori: strisce alternate.
+class _StripePainter extends CustomPainter {
+  final List<Color> colors;
+  final double stripeHeight;
+  final double opacity;
+
+  const _StripePainter({
+    required this.colors,
+    this.stripeHeight = 8.0,
+    this.opacity = 0.18,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (colors.isEmpty) return;
+
+    if (colors.length == 1) {
+      // Singolo colore: sfondo uniforme
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = colors.first.withOpacity(opacity),
+      );
+      return;
+    }
+
+    // Strisce orizzontali alternate
+    double y = 0;
+    int idx = 0;
+    while (y < size.height) {
+      final paint = Paint()
+        ..color = colors[idx % colors.length].withOpacity(opacity);
+      final h = (y + stripeHeight > size.height)
+          ? size.height - y
+          : stripeHeight;
+      canvas.drawRect(
+        Rect.fromLTWH(0, y, size.width, h),
+        paint,
+      );
+      y += stripeHeight;
+      idx++;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StripePainter old) =>
+      old.colors != colors ||
+      old.stripeHeight != stripeHeight ||
+      old.opacity != opacity;
 }
 
 class _ColLayout {
