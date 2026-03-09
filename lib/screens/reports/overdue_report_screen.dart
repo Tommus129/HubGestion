@@ -85,10 +85,17 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
 
   String _formatDate(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
   String _formatCurrency(double v) =>
-      NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
+      NumberFormat.currency(locale: 'it_IT', symbol: 'EUR ').format(v);
 
   // ── GENERA PDF ─────────────────────────────────────────────
   Future<void> _generatePdf() async {
+    // Font con pieno supporto Unicode (€, •, –, ecc.)
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold    = await PdfGoogleFonts.notoSansBold();
+
+    final styleBase = pw.TextStyle(font: fontRegular, fontSize: 9);
+    final styleBold = pw.TextStyle(font: fontBold, fontSize: 9);
+
     final doc = pw.Document();
     final labelFiltro = _filtro == 'non_pagato'
         ? 'Non pagati'
@@ -114,16 +121,19 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
                   children: [
                     pw.Text('Report Insoluti',
                         style: pw.TextStyle(
-                            fontSize: 22, fontWeight: pw.FontWeight.bold)),
+                            font: fontBold,
+                            fontSize: 22)),
                     pw.SizedBox(height: 4),
-                    pw.Text('$labelFiltro  •  $labelPeriodo',
+                    pw.Text('$labelFiltro  -  $labelPeriodo',
                         style: pw.TextStyle(
-                            fontSize: 11, color: PdfColors.grey600)),
+                            font: fontRegular,
+                            fontSize: 11,
+                            color: PdfColors.grey600)),
                   ],
                 ),
                 pw.Text(
                   'Generato il ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
-                  style: pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
+                  style: pw.TextStyle(font: fontRegular, fontSize: 9, color: PdfColors.grey500),
                 ),
               ],
             ),
@@ -143,12 +153,14 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
                 children: [
                   pw.Text('Totale insoluto: ${_formatCurrency(_totaleInsoluto)}',
                       style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
+                          font: fontBold,
                           fontSize: 13,
                           color: PdfColors.red800)),
                   pw.Text('${_insoluti.length} appuntamenti',
                       style: pw.TextStyle(
-                          fontSize: 11, color: PdfColors.red600)),
+                          font: fontRegular,
+                          fontSize: 11,
+                          color: PdfColors.red600)),
                 ],
               ),
             ),
@@ -180,11 +192,7 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
                   'Titolo', 'Cliente', 'Data', 'Orario', 'Fatt.', 'Pag.', 'Importo'
                 ].map((h) => pw.Padding(
                   padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                  child: pw.Text(h,
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
-                          fontSize: 9,
-                          color: PdfColors.grey700)),
+                  child: pw.Text(h, style: styleBold.copyWith(color: PdfColors.grey700)),
                 )).toList(),
               ),
               // Righe
@@ -194,13 +202,13 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
                 final pStr = a.pagato ? 'Si' : 'No';
                 return pw.TableRow(
                   children: [
-                    _cell(a.titolo),
-                    _cell(clienteNome),
-                    _cell(_formatDate(a.data)),
-                    _cell('${a.oraInizio}-${a.oraFine}'),
-                    _cellColored(fStr, a.fatturato ? PdfColors.green700 : PdfColors.red600),
-                    _cellColored(pStr, a.pagato ? PdfColors.green700 : PdfColors.red600),
-                    _cell(_formatCurrency(a.totale), bold: true),
+                    _cell(a.titolo, styleBase),
+                    _cell(clienteNome, styleBase),
+                    _cell(_formatDate(a.data), styleBase),
+                    _cell('${a.oraInizio}-${a.oraFine}', styleBase),
+                    _cellColored(fStr, a.fatturato ? PdfColors.green700 : PdfColors.red600, fontBold),
+                    _cellColored(pStr, a.pagato ? PdfColors.green700 : PdfColors.red600, fontBold),
+                    _cell(_formatCurrency(a.totale), styleBold),
                   ],
                 );
               }),
@@ -219,7 +227,7 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
               child: pw.Text(
                 'TOTALE  ${_formatCurrency(_totaleInsoluto)}',
                 style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
+                    font: fontBold,
                     fontSize: 13,
                     color: PdfColors.white),
               ),
@@ -235,20 +243,15 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
     );
   }
 
-  pw.Widget _cell(String text, {bool bold = false}) => pw.Padding(
+  pw.Widget _cell(String text, pw.TextStyle style) => pw.Padding(
     padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-    child: pw.Text(text,
-        style: pw.TextStyle(
-            fontSize: 9,
-            fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal),
-        maxLines: 2),
+    child: pw.Text(text, style: style, maxLines: 2),
   );
 
-  pw.Widget _cellColored(String text, PdfColor color) => pw.Padding(
+  pw.Widget _cellColored(String text, PdfColor color, pw.Font font) => pw.Padding(
     padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
     child: pw.Text(text,
-        style: pw.TextStyle(fontSize: 9, color: color,
-            fontWeight: pw.FontWeight.bold)),
+        style: pw.TextStyle(font: font, fontSize: 9, color: color)),
   );
 
   // ── BUILD ──────────────────────────────────────────────────
@@ -372,7 +375,7 @@ class _OverdueReportScreenState extends State<OverdueReportScreen> {
                         children: [
                           Icon(Icons.check_circle_outline, size: 64, color: Colors.green[200]),
                           SizedBox(height: 12),
-                          Text('Nessun insoluto! 🎉',
+                          Text('Nessun insoluto! :)',
                               style: TextStyle(fontSize: 18, color: Colors.grey[500])),
                         ],
                       ))
