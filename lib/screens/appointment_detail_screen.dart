@@ -170,6 +170,30 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             ),
             SizedBox(height: 12),
 
+            // NOTE
+            if (apt.note != null && apt.note!.isNotEmpty)
+              Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.notes, color: primary, size: 20),
+                          SizedBox(width: 8),
+                          Text('Note', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(apt.note!, style: TextStyle(fontSize: 15)),
+                    ],
+                  ),
+                ),
+              ),
+            if (apt.note != null && apt.note!.isNotEmpty)
+              SizedBox(height: 8),
+
             // STANZA
             if (_room != null)
               Card(
