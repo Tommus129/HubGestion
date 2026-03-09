@@ -7,6 +7,9 @@ class Client {
   final String? email;
   final String? telefono;
   final String? note;
+  final String? genitori;
+  final String? codiceFiscale;
+  final String? indirizzo;
   final bool archived;
 
   Client({
@@ -16,6 +19,9 @@ class Client {
     this.email,
     this.telefono,
     this.note,
+    this.genitori,
+    this.codiceFiscale,
+    this.indirizzo,
     this.archived = false,
   });
 
@@ -30,6 +36,9 @@ class Client {
       email: data['email'],
       telefono: data['telefono'],
       note: data['note'],
+      genitori: data['genitori'],
+      codiceFiscale: data['codiceFiscale'],
+      indirizzo: data['indirizzo'],
       archived: data['archived'] ?? false,
     );
   }
@@ -41,6 +50,9 @@ class Client {
       'email': email ?? '',
       'telefono': telefono ?? '',
       'note': note ?? '',
+      'genitori': genitori ?? '',
+      'codiceFiscale': codiceFiscale ?? '',
+      'indirizzo': indirizzo ?? '',
       'archived': archived,
       'createdAt': FieldValue.serverTimestamp(),
     };
