@@ -27,7 +27,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Client? _selectedClient;
-  // Periodo per la tabella
   String _periodoType = 'mese';
   int _selectedMonth = DateTime.now().month;
   int _selectedYear  = DateTime.now().year;
@@ -36,7 +35,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   String _filtroFatturato = 'tutti';
   String _filtroPageto    = 'tutti';
 
-  // Filtro PDF separato: settimana / mese / tutti
   String _pdfFiltro = 'mese';
 
   List<Client> _clients = [];
@@ -124,25 +122,25 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   double get _totOre      => _appointments.fold(0, (s, a) => s + a.oreTotali);
 
   String _formatCurrency(double v) =>
-      NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
+      NumberFormat.currency(locale: 'it_IT', symbol: 'EUR ').format(v);
 
-  // ── Calcola range per il filtro PDF ──────────────────────────────
+  // Usa solo ASCII per evitare problemi Unicode nel testo del PDF
   (DateTime, DateTime, String) _pdfRange() {
     final now = DateTime.now();
     switch (_pdfFiltro) {
       case 'settimana':
-        // Lunedì di questa settimana
         final lunedi = now.subtract(Duration(days: now.weekday - 1));
         final start = DateTime(lunedi.year, lunedi.month, lunedi.day);
         final end   = start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
-        final label = 'Settimana ${DateFormat('dd/MM').format(start)}–${DateFormat('dd/MM/yyyy').format(end)}';
+        // Usa '/' invece di '-' (U+2013) per evitare problemi Unicode
+        final label = 'Settimana ${DateFormat('dd/MM').format(start)} - ${DateFormat('dd/MM/yyyy').format(end)}';
         return (start, end, label);
       case 'mese':
         final start = DateTime(now.year, now.month, 1);
         final end   = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
         final label = '${_monthName(now.month)} ${now.year}';
         return (start, end, label);
-      default: // tutti
+      default:
         return (DateTime(2000), DateTime(2099), 'Tutti i periodi');
     }
   }
@@ -151,12 +149,15 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   Future<void> _generatePdf() async {
     if (_selectedClient == null) return;
 
+    // Font con pieno supporto Unicode
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold    = await PdfGoogleFonts.notoSansBold();
+
     final (start, end, periodoLabel) = _pdfRange();
 
-    // FILTRO: solo appuntamenti NON eliminati E NON fatturati nel range
     final List<Appointment> pdfData = _allFetched.where((a) {
       if (a.deleted == true) return false;
-      if (a.fatturato == true) return false; // ← ESCLUDI FATTURATI
+      if (a.fatturato == true) return false;
       if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
       return true;
     }).toList()
@@ -173,8 +174,8 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       return;
     }
 
-    final clienteNome  = _selectedClient!.fullName;
-    final dataOggi     = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    final clienteNome   = _selectedClient!.fullName;
+    final dataOggi      = DateFormat('dd/MM/yyyy').format(DateTime.now());
     final totaleImporto = pdfData.fold(0.0, (s, a) => s + a.totale);
     final totPagato     = pdfData.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
     final totNonPagato  = totaleImporto - totPagato;
@@ -193,7 +194,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             children: [
               pw.Text(
                 'PAGAMENTI NON FATTURATI',
-                style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(font: fontBold, fontSize: 22),
               ),
               pw.SizedBox(height: 6),
               pw.Container(
@@ -203,7 +204,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ),
               pw.SizedBox(height: 16),
 
-              // Info cliente e periodo
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -212,34 +212,32 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text('Cliente',
-                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                          style: pw.TextStyle(font: fontRegular, fontSize: 10, color: PdfColors.grey600)),
                       pw.SizedBox(height: 3),
                       pw.Text(clienteNome,
-                          style: pw.TextStyle(
-                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                          style: pw.TextStyle(font: fontBold, fontSize: 14)),
                       pw.SizedBox(height: 10),
                       pw.Text('Periodo',
-                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                          style: pw.TextStyle(font: fontRegular, fontSize: 10, color: PdfColors.grey600)),
                       pw.SizedBox(height: 3),
                       pw.Text(periodoLabel,
-                          style: const pw.TextStyle(fontSize: 12)),
+                          style: pw.TextStyle(font: fontRegular, fontSize: 12)),
                     ],
                   ),
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Text('Data generazione',
-                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                          style: pw.TextStyle(font: fontRegular, fontSize: 10, color: PdfColors.grey600)),
                       pw.SizedBox(height: 3),
                       pw.Text(dataOggi,
-                          style: const pw.TextStyle(fontSize: 12)),
+                          style: pw.TextStyle(font: fontRegular, fontSize: 12)),
                       pw.SizedBox(height: 10),
                       pw.Text('N. appuntamenti',
-                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                          style: pw.TextStyle(font: fontRegular, fontSize: 10, color: PdfColors.grey600)),
                       pw.SizedBox(height: 3),
                       pw.Text('${pdfData.length}',
-                          style: pw.TextStyle(
-                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                          style: pw.TextStyle(font: fontBold, fontSize: 14)),
                     ],
                   ),
                 ],
@@ -253,24 +251,24 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
             columnWidths: {
-              0: const pw.FlexColumnWidth(1.2),   // Data
-              1: const pw.FlexColumnWidth(2.5),   // Descrizione
-              2: const pw.FlexColumnWidth(0.8),   // Ore
-              3: const pw.FlexColumnWidth(1.0),   // Tariffa
-              4: const pw.FlexColumnWidth(1.2),   // Importo
-              5: const pw.FlexColumnWidth(0.8),   // Pagato
+              0: const pw.FlexColumnWidth(1.2),
+              1: const pw.FlexColumnWidth(2.5),
+              2: const pw.FlexColumnWidth(0.8),
+              3: const pw.FlexColumnWidth(1.0),
+              4: const pw.FlexColumnWidth(1.2),
+              5: const pw.FlexColumnWidth(0.8),
             },
             children: [
               // Header
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
-                  _buildHeaderCell('Data'),
-                  _buildHeaderCell('Descrizione'),
-                  _buildHeaderCell('Ore', align: pw.TextAlign.center),
-                  _buildHeaderCell('Tariffa', align: pw.TextAlign.right),
-                  _buildHeaderCell('Importo', align: pw.TextAlign.right),
-                  _buildHeaderCell('Pagato', align: pw.TextAlign.center),
+                  _buildHeaderCell('Data', fontBold),
+                  _buildHeaderCell('Descrizione', fontBold),
+                  _buildHeaderCell('Ore', fontBold, align: pw.TextAlign.center),
+                  _buildHeaderCell('Tariffa', fontBold, align: pw.TextAlign.right),
+                  _buildHeaderCell('Importo', fontBold, align: pw.TextAlign.right),
+                  _buildHeaderCell('Pagato', fontBold, align: pw.TextAlign.center),
                 ],
               ),
 
@@ -278,31 +276,33 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ...pdfData.map((a) {
                 final persona = _userNames[a.userId] ?? '';
                 final descrizione = a.titolo + (persona.isNotEmpty ? ' ($persona)' : '');
-                
                 return pw.TableRow(
                   children: [
                     _buildDataCell(
                       '${DateFormat('dd/MM/yy').format(a.data)}\n${a.oraInizio}-${a.oraFine}',
+                      fontRegular,
                     ),
-                    _buildDataCell(descrizione),
+                    _buildDataCell(descrizione, fontRegular),
                     _buildDataCell(
                       a.oreTotali.toStringAsFixed(1),
+                      fontRegular,
                       align: pw.TextAlign.center,
                     ),
                     _buildDataCell(
                       'EUR ${a.tariffa.toStringAsFixed(0)}',
+                      fontRegular,
                       align: pw.TextAlign.right,
                     ),
                     _buildDataCell(
                       'EUR ${a.totale.toStringAsFixed(2)}',
+                      fontBold,
                       align: pw.TextAlign.right,
-                      bold: true,
                     ),
                     _buildDataCell(
                       a.pagato ? 'SI' : 'NO',
+                      fontBold,
                       align: pw.TextAlign.center,
                       color: a.pagato ? PdfColors.green700 : PdfColors.red700,
-                      bold: true,
                     ),
                   ],
                 );
@@ -326,14 +326,14 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  _buildTotalRow('Totale importo:', 'EUR ${totaleImporto.toStringAsFixed(2)}'),
+                  _buildTotalRow('Totale importo:', 'EUR ${totaleImporto.toStringAsFixed(2)}', fontRegular, fontRegular),
                   pw.SizedBox(height: 6),
                   pw.Divider(color: PdfColors.grey300, height: 1),
                   pw.SizedBox(height: 6),
-                  _buildTotalRow('Già pagato:', 'EUR ${totPagato.toStringAsFixed(2)}',
+                  _buildTotalRow('Gia pagato:', 'EUR ${totPagato.toStringAsFixed(2)}', fontRegular, fontRegular,
                       valueColor: PdfColors.green700),
                   pw.SizedBox(height: 4),
-                  _buildTotalRow('Non pagato:', 'EUR ${totNonPagato.toStringAsFixed(2)}',
+                  _buildTotalRow('Non pagato:', 'EUR ${totNonPagato.toStringAsFixed(2)}', fontRegular, fontRegular,
                       valueColor: PdfColors.red700),
                   pw.SizedBox(height: 10),
                   pw.Divider(color: PdfColors.grey400, height: 2),
@@ -341,8 +341,8 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                   _buildTotalRow(
                     'DA FATTURARE:',
                     'EUR ${totaleImporto.toStringAsFixed(2)}',
-                    labelBold: true,
-                    valueBold: true,
+                    fontBold,
+                    fontBold,
                     labelSize: 11,
                     valueSize: 14,
                     valueColor: PdfColors.teal700,
@@ -354,12 +354,12 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
           pw.SizedBox(height: 30),
 
-          // ── FOOTER NOTE ──────────────────────────────────────
+          // ── FOOTER ──────────────────────────────────────────
           pw.Divider(color: PdfColors.grey300),
           pw.SizedBox(height: 8),
           pw.Text(
             'Documento generato automaticamente da HubGestion',
-            style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+            style: pw.TextStyle(font: fontRegular, fontSize: 8, color: PdfColors.grey500),
           ),
         ],
       ),
@@ -369,7 +369,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final safeName = clienteNome.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
     final fileName = 'non_fatturati_${safeName}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
 
-    // Flutter Web: forza download tramite dart:html
     if (kIsWeb) {
       final blob = html.Blob([bytes], 'application/pdf');
       final url  = html.Url.createObjectUrlFromBlob(blob);
@@ -388,30 +387,26 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         );
       }
     } else {
-      // Mobile/Desktop: share sheet
       await Printing.sharePdf(bytes: bytes, filename: fileName);
     }
   }
 
   // ── HELPER PDF CELLS ─────────────────────────────────────────────
-  pw.Widget _buildHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+  pw.Widget _buildHeaderCell(String text, pw.Font font, {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: pw.Text(
         text,
-        style: pw.TextStyle(
-          fontWeight: pw.FontWeight.bold,
-          fontSize: 10,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 10),
         textAlign: align,
       ),
     );
   }
 
   pw.Widget _buildDataCell(
-    String text, {
+    String text,
+    pw.Font font, {
     pw.TextAlign align = pw.TextAlign.left,
-    bool bold = false,
     PdfColor? color,
   }) {
     return pw.Padding(
@@ -419,8 +414,8 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       child: pw.Text(
         text,
         style: pw.TextStyle(
+          font: font,
           fontSize: 9,
-          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
         ),
         textAlign: align,
@@ -431,9 +426,9 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
   pw.Widget _buildTotalRow(
     String label,
-    String value, {
-    bool labelBold = false,
-    bool valueBold = false,
+    String value,
+    pw.Font labelFont,
+    pw.Font valueFont, {
     double labelSize = 10,
     double valueSize = 10,
     PdfColor? valueColor,
@@ -441,21 +436,8 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        pw.Text(
-          label,
-          style: pw.TextStyle(
-            fontSize: labelSize,
-            fontWeight: labelBold ? pw.FontWeight.bold : pw.FontWeight.normal,
-          ),
-        ),
-        pw.Text(
-          value,
-          style: pw.TextStyle(
-            fontSize: valueSize,
-            fontWeight: valueBold ? pw.FontWeight.bold : pw.FontWeight.normal,
-            color: valueColor ?? PdfColors.black,
-          ),
-        ),
+        pw.Text(label, style: pw.TextStyle(font: labelFont, fontSize: labelSize)),
+        pw.Text(value, style: pw.TextStyle(font: valueFont, fontSize: valueSize, color: valueColor ?? PdfColors.black)),
       ],
     );
   }
@@ -483,7 +465,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       body: Column(
         children: [
 
-          // ── PANNELLO FILTRI TABELLA ──────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -592,17 +573,16 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                   children: [
                     Text('Fatturato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                     _segBtn('tutti', 'Tutti', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
-                    _segBtn('si', 'Sì', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
+                    _segBtn('si', 'Si', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
                     _segBtn('no', 'No', _filtroFatturato, (v) { setState(() => _filtroFatturato = v); _applyLocalFilters(); }, primary),
                     const SizedBox(width: 8),
                     Text('Pagato:', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                     _segBtn('tutti', 'Tutti', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
-                    _segBtn('si', 'Sì', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
+                    _segBtn('si', 'Si', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
                     _segBtn('no', 'No', _filtroPageto, (v) { setState(() => _filtroPageto = v); _applyLocalFilters(); }, primary),
                   ],
                 ),
 
-                // ── FILTRO PDF ──────────────────────────────────────
                 if (_selectedClient != null && hasDati) ...[
                   const SizedBox(height: 10),
                   Divider(height: 1, color: Colors.grey.shade100),
@@ -823,7 +803,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       children: [
                         Text(DateHelpers.formatDateShort(apt.data),
                             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        Text('${apt.oraInizio}–${apt.oraFine}',
+                        Text('${apt.oraInizio}-${apt.oraFine}',
                             style: TextStyle(fontSize: 10, color: Colors.grey[400])),
                       ],
                     )),
@@ -851,7 +831,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                     )),
                     DataCell(Text(apt.oreTotali.toStringAsFixed(1),
                         style: const TextStyle(fontSize: 13))),
-                    DataCell(Text('${apt.tariffa.toStringAsFixed(0)}€/h',
+                    DataCell(Text('${apt.tariffa.toStringAsFixed(0)} EUR/h',
                         style: TextStyle(fontSize: 12, color: Colors.grey[500]))),
                     DataCell(Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -888,7 +868,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                             Icon(apt.fatturato ? Icons.check : Icons.circle_outlined,
                                 size: 12, color: apt.fatturato ? Colors.orange[700] : Colors.grey[400]),
                             const SizedBox(width: 4),
-                            Text(apt.fatturato ? 'Sì' : 'No',
+                            Text(apt.fatturato ? 'Si' : 'No',
                                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
                                     color: apt.fatturato ? Colors.orange[700] : Colors.grey[400])),
                           ]),
@@ -919,7 +899,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                             Icon(apt.pagato ? Icons.check : Icons.circle_outlined,
                                 size: 12, color: apt.pagato ? Colors.green[700] : Colors.grey[400]),
                             const SizedBox(width: 4),
-                            Text(apt.pagato ? 'Sì' : 'No',
+                            Text(apt.pagato ? 'Si' : 'No',
                                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
                                     color: apt.pagato ? Colors.green[700] : Colors.grey[400])),
                           ]),
