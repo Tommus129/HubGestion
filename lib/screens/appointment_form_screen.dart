@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/appointment.dart';
 import '../models/room.dart';
 import '../models/client.dart';
+import '../models/user.dart';
 import '../services/appointment_service.dart';
 import '../services/room_service.dart';
 import '../services/client_service.dart';
@@ -41,6 +42,10 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   bool _pagato = false;
   bool _isSocio = true;
 
+  // Multi-lavoratore
+  List<UfficioUser> _allUsers = [];
+  List<String> _selectedWorkerIds = [];
+
   List<Room> _rooms = [];
   List<Client> _clients = [];
   bool get isEditing => widget.appointment != null;
@@ -54,6 +59,10 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
     final tariffaDefault = auth.currentUser?.tariffa ?? 50.0;
     _tariffaController.text = tariffaDefault.toStringAsFixed(0);
+    // Pre-seleziona l'utente corrente come lavoratore di default
+    if (auth.currentUser != null) {
+      _selectedWorkerIds = [auth.currentUser!.uid];
+    }
     _loadData();
     if (isEditing) _prefillForm();
   }
@@ -66,6 +75,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     _fatturato = apt.fatturato;
     _pagato = apt.pagato;
     _isSocio = apt.isSocio;
+    _selectedWorkerIds = List.from(apt.workerIds);
     final s = apt.oraInizio.split(':');
     final e = apt.oraFine.split(':');
     _oraInizio = TimeOfDay(hour: int.parse(s[0]), minute: int.parse(s[1]));
@@ -89,6 +99,14 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
             if (m.isNotEmpty) _selectedClient = m.first;
           }
         }));
+    // Carica tutti gli utenti
+    FirebaseFirestore.instance.collection('users').get().then((snap) {
+      setState(() {
+        _allUsers = snap.docs
+            .map((d) => UfficioUser.fromFirestore(d.data(), d.id))
+            .toList();
+      });
+    });
   }
 
   Future<void> _pickDate() async {
@@ -130,9 +148,16 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
 
   double get _oreTotali => _durataMinuti / 60.0;
   double get _tariffaBase => double.tryParse(_tariffaController.text) ?? 0;
-  // Se non è socio, applica +15%
   double get _tariffaFinale => _isSocio ? _tariffaBase : _tariffaBase * 1.15;
   double get _totale => _oreTotali * _tariffaFinale;
+
+  Color _userColor(UfficioUser u) {
+    try {
+      return Color(int.parse('FF${(u.personaColor ?? '#607D8B').replaceAll('#', '')}', radix: 16));
+    } catch (_) {
+      return Colors.blueGrey;
+    }
+  }
 
   Future<bool> _showConflictDialog({
     required String titolo,
@@ -194,6 +219,11 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       if (!go) { setState(() => _loading = false); return; }
     }
 
+    // workerIds: usa i selezionati, se vuoti usa l'utente corrente
+    final workers = _selectedWorkerIds.isNotEmpty
+        ? _selectedWorkerIds
+        : [auth.firebaseUser!.uid];
+
     try {
       if (isEditing) {
         await _aptService.updateAppointment(widget.appointment!.id!, {
@@ -208,6 +238,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           'clientId': _selectedClient!.id,
           'note': _noteController.text,
           'isSocio': _isSocio,
+          'workerIds': workers,
           'fatturato': _fatturato,
           'pagato': _pagato,
         });
@@ -226,6 +257,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           roomId: _selectedRoom!.id!,
           note: _noteController.text,
           isSocio: _isSocio,
+          workerIds: workers,
         ));
       }
       if (mounted) Navigator.pop(context);
@@ -237,6 +269,95 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
 
   void _err(String msg) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
+
+  // ── WIDGET SELETTORE LAVORATORI ─────────────────────────────────────────
+  Widget _buildWorkerSelector(Color primary) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Lavoratori', style: TextStyle(
+          fontWeight: FontWeight.w600, color: Colors.grey[700],
+          fontSize: 13, letterSpacing: 0.5,
+        )),
+        SizedBox(height: 8),
+        if (_allUsers.isEmpty)
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(children: [
+              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+              SizedBox(width: 8),
+              Text('Caricamento utenti...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            ]),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _allUsers.map((u) {
+              final selected = _selectedWorkerIds.contains(u.uid);
+              final color = _userColor(u);
+              final name = u.displayName ?? u.email;
+              return GestureDetector(
+                onTap: () => setState(() {
+                  if (selected) {
+                    _selectedWorkerIds.remove(u.uid);
+                  } else {
+                    _selectedWorkerIds.add(u.uid);
+                  }
+                }),
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 150),
+                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: selected ? color.withOpacity(0.15) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selected ? color : Colors.grey[300]!,
+                      width: selected ? 2.0 : 1.0,
+                    ),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: selected ? color : Colors.grey[400],
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                        color: selected ? color : Colors.grey[700],
+                      ),
+                    ),
+                    if (selected) ...[
+                      SizedBox(width: 4),
+                      Icon(Icons.check_circle, size: 14, color: color),
+                    ],
+                  ]),
+                ),
+              );
+            }).toList(),
+          ),
+        if (_selectedWorkerIds.isEmpty)
+          Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Nessun lavoratore selezionato — verrà usato l\'utente corrente',
+              style: TextStyle(fontSize: 11, color: Colors.orange[700], fontStyle: FontStyle.italic),
+            ),
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -389,6 +510,10 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
               ),
               SizedBox(height: 16),
 
+              // LAVORATORI
+              _buildWorkerSelector(primary),
+              SizedBox(height: 16),
+
               // TOGGLE SOCIO
               Container(
                 decoration: BoxDecoration(
@@ -407,9 +532,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    _isSocio
-                        ? 'Tariffa standard applicata'
-                        : 'Supplemento del 15% applicato alla tariffa',
+                    _isSocio ? 'Tariffa standard applicata' : 'Supplemento del 15% applicato alla tariffa',
                     style: TextStyle(fontSize: 12),
                   ),
                   secondary: Icon(

@@ -13,6 +13,7 @@ class Appointment {
   final String createdBy;
   final String clientId;
   final String roomId;
+  final List<String> workerIds;
   final String? note;
   final bool isSocio;
   final bool fatturato;
@@ -33,6 +34,7 @@ class Appointment {
     required this.createdBy,
     required this.clientId,
     required this.roomId,
+    this.workerIds = const [],
     this.note,
     this.isSocio = true,
     this.fatturato = false,
@@ -56,6 +58,7 @@ class Appointment {
       createdBy: data['createdBy'] ?? '',
       clientId: data['clientId'] ?? '',
       roomId: data['roomId'] ?? '',
+      workerIds: List<String>.from(data['workerIds'] ?? []),
       note: data['note'],
       isSocio: data['isSocio'] ?? true,
       fatturato: data['fatturato'] ?? false,
@@ -78,6 +81,7 @@ class Appointment {
       'createdBy': createdBy,
       'clientId': clientId,
       'roomId': roomId,
+      'workerIds': workerIds,
       'note': note,
       'isSocio': isSocio,
       'fatturato': fatturato,
