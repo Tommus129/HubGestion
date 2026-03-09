@@ -75,7 +75,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       case 'settimana':
         final monday = _now.subtract(Duration(days: _now.weekday - 1));
         start = DateTime(monday.year, monday.month, monday.day);
-        end   = start.add(Duration(days: 6));
+        end   = start.add(const Duration(days: 6));
         break;
       case 'anno':
         start = DateTime(_now.year, 1, 1);
@@ -120,7 +120,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   String _formatCurrencyPdf(double v) =>
       NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
 
-  // ── GENERA PDF con lista _filtered corrente ──────────────────────────────
   Future<void> _generatePdf() async {
     final periodoLabel = _periodo == 'settimana' ? 'Settimana corrente'
         : _periodo == 'mese' ? 'Mese corrente'
@@ -131,7 +130,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     final pagLabel = _filtroPagato == 'tutti' ? 'Tutti'
         : _filtroPagato == 'si' ? 'Pagati' : 'Non pagati';
 
-    // Persona visualizzata
     String personaLabel = 'Tutti gli utenti';
     if (_filtroUserId != null) {
       personaLabel = _userNames[_filtroUserId] ?? _filtroUserId!;
@@ -173,7 +171,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             pw.SizedBox(height: 8),
             pw.Divider(color: PdfColors.grey300),
             pw.SizedBox(height: 4),
-            // Box riepilogo
             pw.Row(
               children: [
                 _pdfMetric('Appuntamenti', '${_filtered.length}', PdfColors.blueGrey700),
@@ -209,7 +206,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               6: pw.FlexColumnWidth(1.1),
             },
             children: [
-              // Header
               pw.TableRow(
                 decoration: pw.BoxDecoration(color: PdfColors.grey100),
                 children: ['Titolo', 'Cliente', 'Data', 'Orario', 'Fatt.', 'Pag.', 'Importo']
@@ -223,7 +219,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                         ))
                     .toList(),
               ),
-              // Righe
               ..._filtered.map((a) {
                 final clienteNome = _clientNames[a.clientId] ?? '—';
                 return pw.TableRow(
@@ -243,7 +238,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ],
           ),
           pw.SizedBox(height: 16),
-          // Totale
           pw.Align(
             alignment: pw.Alignment.centerRight,
             child: pw.Container(
@@ -328,7 +322,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         actions: [
           if (_filtered.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.picture_as_pdf),
+              icon: const Icon(Icons.picture_as_pdf),
               tooltip: 'Esporta PDF',
               onPressed: _generatePdf,
             ),
@@ -419,14 +413,14 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                   const SizedBox(height: 10),
                 ],
 
-                // Chips periodo — aggiunta settimana
+                // Chips periodo
                 Row(children: ['settimana', 'mese', 'anno', 'sempre'].map((p) {
                   final active = _periodo == p;
                   final label = p == 'settimana' ? 'Sett.' : p == 'mese' ? 'Mese' : p == 'anno' ? 'Anno' : 'Sempre';
                   return Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 3),
-2                      child: GestureDetector(
+                      child: GestureDetector(
                         onTap: () { setState(() => _periodo = p); _loadAppointments(); },
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 150),
@@ -475,7 +469,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
 
           Divider(height: 1, color: Colors.grey.shade200),
 
-          // ── METRIC BOX ───────────────────────────────────────────────
+          // ── METRIC BOX ───────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Row(children: [
@@ -498,7 +492,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ]),
           ),
 
-          // ── HEADER LISTA ─────────────────────────────────────────────
+          // ── HEADER LISTA ─────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
             child: Row(
@@ -523,7 +517,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ),
           ),
 
-          // ── LISTA ───────────────────────────────────────────────────
+          // ── LISTA ────────────────────────────────────────────────
           Expanded(
             child: _filtered.isEmpty
                 ? Center(child: Column(
