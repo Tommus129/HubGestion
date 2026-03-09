@@ -71,7 +71,8 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   _search.isEmpty ||
                   c.fullName.toLowerCase().contains(_search) ||
                   (c.email?.toLowerCase().contains(_search) ?? false) ||
-                  (c.telefono?.toLowerCase().contains(_search) ?? false)
+                  (c.telefono?.toLowerCase().contains(_search) ?? false) ||
+                  (c.codiceFiscale?.toLowerCase().contains(_search) ?? false)
                 ).toList();
 
                 return ListView.builder(
@@ -122,6 +123,8 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                                       _infoRow(Icons.email_outlined, client.email!, 11),
                                     if ((client.telefono ?? '').isNotEmpty)
                                       _infoRow(Icons.phone_outlined, client.telefono!, 11),
+                                    if ((client.codiceFiscale ?? '').isNotEmpty)
+                                      _infoRow(Icons.badge_outlined, client.codiceFiscale!, 11),
                                     if ((client.note ?? '').isNotEmpty)
                                       Row(children: [
                                         Icon(Icons.note_outlined, size: 11, color: Colors.amber[700]),
@@ -178,9 +181,9 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.55,
+        initialChildSize: 0.65,
         minChildSize: 0.35,
-        maxChildSize: 0.9,
+        maxChildSize: 0.95,
         builder: (_, scrollCtrl) => Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -232,6 +235,8 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                 ),
               ]),
               Divider(height: 28),
+
+              // CONTATTO
               _sectionTitle('Contatto'),
               SizedBox(height: 10),
               if ((client.email ?? '').isNotEmpty)
@@ -243,6 +248,27 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   padding: EdgeInsets.only(bottom: 8),
                   child: Text('Nessun contatto inserito', style: TextStyle(color: Colors.grey, fontSize: 13)),
                 ),
+
+              // DATI ANAGRAFICI
+              if ((client.codiceFiscale ?? '').isNotEmpty || (client.indirizzo ?? '').isNotEmpty) ...[
+                Divider(height: 28),
+                _sectionTitle('Dati Anagrafici'),
+                SizedBox(height: 10),
+                if ((client.codiceFiscale ?? '').isNotEmpty)
+                  _detailRow(icon: Icons.badge_outlined, color: Colors.indigo, label: 'Codice Fiscale', value: client.codiceFiscale!, copiable: true),
+                if ((client.indirizzo ?? '').isNotEmpty)
+                  _detailRow(icon: Icons.home_outlined, color: Colors.teal, label: 'Indirizzo', value: client.indirizzo!),
+              ],
+
+              // GENITORI
+              if ((client.genitori ?? '').isNotEmpty) ...[
+                Divider(height: 28),
+                _sectionTitle('Genitori / Tutore'),
+                SizedBox(height: 10),
+                _detailRow(icon: Icons.people_outlined, color: Colors.purple, label: 'Genitori / Tutore', value: client.genitori!),
+              ],
+
+              // NOTE
               if ((client.note ?? '').isNotEmpty) ...[
                 Divider(height: 28),
                 _sectionTitle('Note'),
@@ -258,6 +284,7 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   child: Text(client.note!, style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
                 ),
               ],
+
               SizedBox(height: 20),
               Row(children: [
                 Expanded(
@@ -344,6 +371,9 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
     final emailController = TextEditingController(text: client?.email ?? '');
     final telefonoController = TextEditingController(text: client?.telefono ?? '');
     final noteController = TextEditingController(text: client?.note ?? '');
+    final genitoriController = TextEditingController(text: client?.genitori ?? '');
+    final cfController = TextEditingController(text: client?.codiceFiscale ?? '');
+    final indirizzoController = TextEditingController(text: client?.indirizzo ?? '');
 
     showDialog(
       context: context,
@@ -352,17 +382,79 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // NOME E COGNOME
               Row(children: [
                 Expanded(child: TextField(controller: nomeController, decoration: InputDecoration(labelText: 'Nome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
                 SizedBox(width: 8),
                 Expanded(child: TextField(controller: cognomeController, decoration: InputDecoration(labelText: 'Cognome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
               ]),
               SizedBox(height: 12),
+
+              // CONTATTO
               TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
               SizedBox(height: 12),
               TextField(controller: telefonoController, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Telefono', prefixIcon: Icon(Icons.phone_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+              SizedBox(height: 16),
+
+              // SEPARATORE DATI ANAGRAFICI
+              Row(children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('Dati Anagrafici (facoltativi)', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                ),
+                Expanded(child: Divider()),
+              ]),
               SizedBox(height: 12),
+
+              // CODICE FISCALE
+              TextField(
+                controller: cfController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: 'Codice Fiscale',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              SizedBox(height: 12),
+
+              // INDIRIZZO
+              TextField(
+                controller: indirizzoController,
+                decoration: InputDecoration(
+                  labelText: 'Indirizzo',
+                  prefixIcon: Icon(Icons.home_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              SizedBox(height: 12),
+
+              // GENITORI
+              TextField(
+                controller: genitoriController,
+                decoration: InputDecoration(
+                  labelText: 'Genitori / Tutore',
+                  prefixIcon: Icon(Icons.people_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              SizedBox(height: 16),
+
+              // SEPARATORE NOTE
+              Row(children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('Note', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                ),
+                Expanded(child: Divider()),
+              ]),
+              SizedBox(height: 12),
+
+              // NOTE
               TextField(controller: noteController, maxLines: 3, decoration: InputDecoration(labelText: 'Note', prefixIcon: Icon(Icons.note_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
             ],
           ),
@@ -379,6 +471,9 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                 email: emailController.text.trim(),
                 telefono: telefonoController.text.trim(),
                 note: noteController.text.trim(),
+                genitori: genitoriController.text.trim(),
+                codiceFiscale: cfController.text.trim().toUpperCase(),
+                indirizzo: indirizzoController.text.trim(),
               );
               if (client == null) {
                 await ClientService().createClient(newClient);
