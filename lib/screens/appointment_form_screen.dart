@@ -22,6 +22,7 @@ class AppointmentFormScreen extends StatefulWidget {
 class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titoloController = TextEditingController();
+  final _noteController = TextEditingController();
 
   // ✅ PRIMA era hardcoded a '50' [cite:52]
   final _tariffaController = TextEditingController();
@@ -66,6 +67,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   void _prefillForm() {
     final apt = widget.appointment!;
     _titoloController.text = apt.titolo;
+    _noteController.text = apt.note ?? '';
     _tariffaController.text = apt.tariffa.toString();
     _fatturato = apt.fatturato;
     _pagato = apt.pagato;
@@ -247,6 +249,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           'totale': _totale,
           'roomId': _selectedRoom!.id,
           'clientId': _selectedClient!.id,
+          'note': _noteController.text,
           'fatturato': _fatturato,
           'pagato': _pagato,
         });
@@ -263,6 +266,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           createdBy: auth.firebaseUser!.uid,
           clientId: _selectedClient!.id!,
           roomId: _selectedRoom!.id!,
+          note: _noteController.text,
         ));
       }
       if (mounted) Navigator.pop(context);
@@ -301,6 +305,22 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                       OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 validator: (v) => v!.isEmpty ? 'Campo obbligatorio' : null,
+              ),
+              SizedBox(height: 16),
+
+              // NOTE
+              TextFormField(
+                controller: _noteController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Note (Opzionali)',
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.only(bottom: 32.0), // allinea l'icona in alto
+                    child: Icon(Icons.notes),
+                  ),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
               ),
               SizedBox(height: 16),
 
