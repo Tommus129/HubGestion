@@ -23,7 +23,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   final AppointmentService _aptService = AppointmentService();
   Client? _client;
   Room? _room;
-  String? _creatorName;
+
+  // uid -> {name, color}
+  Map<String, Map<String, dynamic>> _workersData = {};
 
   @override
   void initState() {
@@ -32,27 +34,50 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   }
 
   Future<void> _loadDetails() async {
+    final apt = widget.appointment;
+
+    // Cliente
     ClientService().getClients(includeArchived: true).listen((clients) {
-      final match = clients.where((c) => c.id == widget.appointment.clientId);
+      final match = clients.where((c) => c.id == apt.clientId);
       if (match.isNotEmpty && mounted) setState(() => _client = match.first);
     });
+
+    // Stanza
     RoomService().getRooms().listen((rooms) {
-      final match = rooms.where((r) => r.id == widget.appointment.roomId);
+      final match = rooms.where((r) => r.id == apt.roomId);
       if (match.isNotEmpty && mounted) setState(() => _room = match.first);
     });
 
-    // Recupera il nome del creatore (utente)
-    try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.appointment.userId).get();
-      if (doc.exists && mounted) {
-        final data = doc.data();
-        setState(() {
-          _creatorName = data?['displayName'] ?? data?['email'] ?? 'Utente sconosciuto';
-        });
-      }
-    } catch (e) {
-      // Ignore
+    // Tutti i lavoratori: userId + workerIds (deduplicati)
+    final seen = <String>{};
+    final ids = <String>[];
+    if (apt.userId.isNotEmpty && seen.add(apt.userId)) ids.add(apt.userId);
+    for (final w in apt.workerIds) {
+      if (w.isNotEmpty && seen.add(w)) ids.add(w);
     }
+
+    final db = FirebaseFirestore.instance;
+    final result = <String, Map<String, dynamic>>{};
+    for (final uid in ids) {
+      try {
+        final doc = await db.collection('users').doc(uid).get();
+        if (doc.exists) {
+          final d = doc.data()!;
+          final name = d['displayName']?.toString().isNotEmpty == true
+              ? d['displayName']
+              : (d['email'] ?? 'Utente');
+          final hex = (d['personaColor'] ?? '607D8B').toString().replaceAll('#', '');
+          Color color;
+          try {
+            color = Color(int.parse('FF$hex', radix: 16));
+          } catch (_) {
+            color = Colors.blueGrey;
+          }
+          result[uid] = {'name': name, 'color': color, 'isOwner': uid == apt.userId};
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _workersData = result);
   }
 
   Future<void> _toggleFatturato() async {
@@ -70,18 +95,17 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   }
 
   Future<void> _deleteAppointment(BuildContext context) async {
-    final primary = Theme.of(context).colorScheme.primary;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Elimina Appuntamento'),
+        title: const Text('Elimina Appuntamento'),
         content: Text('Sei sicuro di voler eliminare "${widget.appointment.titolo}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Annulla')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annulla')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: Text('Elimina'),
+            child: const Text('Elimina'),
           ),
         ],
       ),
@@ -94,22 +118,22 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final auth = Provider.of<AuthService>(context);
-    final user = auth.currentUser;
-    final apt = widget.appointment;
-    final canEdit = user?.isAdmin == true || user?.uid == apt.userId;
+    final primary   = Theme.of(context).colorScheme.primary;
+    final auth      = Provider.of<AuthService>(context);
+    final user      = auth.currentUser;
+    final apt       = widget.appointment;
+    final canEdit   = user?.isAdmin == true || user?.uid == apt.userId;
     final roomColor = _room != null
         ? Color(int.parse('FF${_room!.color.replaceAll("#", "")}', radix: 16))
         : primary;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Dettaglio'),
+        title: const Text('Dettaglio'),
         actions: [
           if (canEdit)
             IconButton(
-              icon: Icon(Icons.edit),
+              icon: const Icon(Icons.edit),
               onPressed: () => Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
@@ -122,147 +146,235 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             ),
           if (canEdit)
             IconButton(
-              icon: Icon(Icons.delete),
+              icon: const Icon(Icons.delete),
               onPressed: () => _deleteAppointment(context),
             ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // HEADER CARD
+
+            // ── HEADER ────────────────────────────────────────────
             Card(
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(apt.titolo,
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 8),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
                     Row(children: [
-                      Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                      SizedBox(width: 6),
+                      const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                      const SizedBox(width: 6),
                       Text(DateHelpers.formatDate(apt.data),
-                          style: TextStyle(color: Colors.grey)),
+                          style: const TextStyle(color: Colors.grey)),
                     ]),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Row(children: [
-                      Icon(Icons.access_time, size: 16, color: Colors.grey),
-                      SizedBox(width: 6),
+                      const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                      const SizedBox(width: 6),
                       Text('${apt.oraInizio} - ${apt.oraFine}',
-                          style: TextStyle(color: Colors.grey)),
-                    ]),
-                    SizedBox(height: 12),
-                    Divider(height: 1),
-                    SizedBox(height: 12),
-                    Row(children: [
-                      Icon(Icons.person_pin, size: 16, color: primary),
-                      SizedBox(width: 6),
-                      Text('Creato da: ', style: TextStyle(color: Colors.grey, fontSize: 13)),
-                      Text(_creatorName ?? 'Caricamento...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          style: const TextStyle(color: Colors.grey)),
                     ]),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
 
-            // NOTE
-            if (apt.note != null && apt.note!.isNotEmpty)
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.notes, color: primary, size: 20),
-                          SizedBox(width: 8),
-                          Text('Note', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        ],
+            // ── LAVORATORI ────────────────────────────────────────
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.group, color: primary, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Lavoratori',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
-                      SizedBox(height: 8),
-                      Text(apt.note!, style: TextStyle(fontSize: 15)),
-                    ],
-                  ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_workersData.length}',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primary),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
+                    if (_workersData.isEmpty)
+                      const Text('Caricamento...', style: TextStyle(color: Colors.grey))
+                    else
+                      ..._workersData.entries.map((entry) {
+                        final uid     = entry.key;
+                        final name    = entry.value['name'] as String;
+                        final color   = entry.value['color'] as Color;
+                        final isOwner = entry.value['isOwner'] as bool;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: color,
+                                child: Text(
+                                  name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              if (isOwner)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: primary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: primary.withOpacity(0.3)),
+                                  ),
+                                  child: Text(
+                                    'Responsabile',
+                                    style: TextStyle(fontSize: 11, color: primary, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      }),
+                  ],
                 ),
               ),
-            if (apt.note != null && apt.note!.isNotEmpty)
-              SizedBox(height: 8),
+            ),
+            const SizedBox(height: 12),
 
-            // STANZA
-            if (_room != null)
+            // ── NOTE ─────────────────────────────────────────────
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.notes, color: primary, size: 20),
+                      const SizedBox(width: 8),
+                      const Text('Note', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ]),
+                    const SizedBox(height: 10),
+                    if (apt.note != null && apt.note!.trim().isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade200),
+                        ),
+                        child: Text(
+                          apt.note!,
+                          style: const TextStyle(fontSize: 15, height: 1.5),
+                        ),
+                      )
+                    else
+                      Row(children: [
+                        Icon(Icons.info_outline, size: 14, color: Colors.grey.shade400),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Nessuna nota',
+                          style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic),
+                        ),
+                      ]),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ── STANZA ───────────────────────────────────────────
+            if (_room != null) ...[
               Card(
                 child: ListTile(
                   leading: Container(
-                    width: 40,
-                    height: 40,
+                    width: 40, height: 40,
                     decoration: BoxDecoration(
                         color: roomColor, borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.meeting_room, color: Colors.white, size: 20),
+                    child: const Icon(Icons.meeting_room, color: Colors.white, size: 20),
                   ),
-                  title: Text('Stanza'),
+                  title: const Text('Stanza'),
                   subtitle: Text(_room!.name,
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
-            SizedBox(height: 8),
+              const SizedBox(height: 12),
+            ],
 
-            // CLIENTE
-            if (_client != null)
+            // ── CLIENTE ──────────────────────────────────────────
+            if (_client != null) ...[
               Card(
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: primary,
                     child: Text(_client!.nome[0].toUpperCase(),
-                        style: TextStyle(color: Colors.white)),
+                        style: const TextStyle(color: Colors.white)),
                   ),
-                  title: Text('Cliente'),
+                  title: const Text('Cliente'),
                   subtitle: Text(_client!.fullName,
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  trailing: _client!.telefono != null &&
-                          _client!.telefono!.isNotEmpty
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: _client!.telefono != null && _client!.telefono!.isNotEmpty
                       ? Icon(Icons.phone, color: primary)
                       : null,
                 ),
               ),
-            SizedBox(height: 8),
+              const SizedBox(height: 12),
+            ],
 
-            // ECONOMICO
+            // ── RIEPILOGO ECONOMICO ───────────────────────────────
             Card(
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Riepilogo Economico',
+                    const Text('Riepilogo Economico',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     _infoRow('Ore totali', '${apt.oreTotali}h'),
                     _infoRow('Tariffa', '${DateHelpers.formatCurrency(apt.tariffa)}/ora'),
-                    Divider(),
+                    const Divider(),
                     _infoRow('Totale', DateHelpers.formatCurrency(apt.totale),
                         bold: true, color: primary),
                   ],
                 ),
               ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 12),
 
-            // STATO PAGAMENTO
+            // ── STATO PAGAMENTO ───────────────────────────────────
             Card(
               child: Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Stato Pagamento',
+                    const Text('Stato Pagamento',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
@@ -286,20 +398,20 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  Widget _infoRow(String label, String value,
-      {bool bold = false, Color? color}) {
+  Widget _infoRow(String label, String value, {bool bold = false, Color? color}) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey)),
+          Text(label, style: const TextStyle(color: Colors.grey)),
           Text(value,
               style: TextStyle(
                 fontWeight: bold ? FontWeight.bold : FontWeight.normal,
@@ -321,7 +433,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
           color: active ? activeColor.withOpacity(0.1) : Colors.grey[100],
           borderRadius: BorderRadius.circular(8),
@@ -330,7 +442,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
         child: Column(
           children: [
             Icon(icon, color: active ? activeColor : Colors.grey, size: 28),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(label,
                 style: TextStyle(
                   color: active ? activeColor : Colors.grey,
