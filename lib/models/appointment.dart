@@ -13,6 +13,7 @@ class Appointment {
   final String createdBy;
   final String clientId;
   final String roomId;
+  final String? note;
   final bool fatturato;
   final bool pagato;
   final bool deleted;
@@ -31,6 +32,7 @@ class Appointment {
     required this.createdBy,
     required this.clientId,
     required this.roomId,
+    this.note,
     this.fatturato = false,
     this.pagato = false,
     this.deleted = false,
@@ -52,6 +54,7 @@ class Appointment {
       createdBy: data['createdBy'] ?? '',
       clientId: data['clientId'] ?? '',
       roomId: data['roomId'] ?? '',
+      note: data['note'],
       fatturato: data['fatturato'] ?? false,
       pagato: data['pagato'] ?? false,
       deleted: data['deleted'] ?? false,
@@ -72,6 +75,7 @@ class Appointment {
       'createdBy': createdBy,
       'clientId': clientId,
       'roomId': roomId,
+      'note': note,
       'fatturato': fatturato,
       'pagato': pagato,
       'deleted': deleted,
