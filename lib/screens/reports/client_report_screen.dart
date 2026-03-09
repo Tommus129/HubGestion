@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../../models/appointment.dart';
 import '../../models/client.dart';
 import '../../services/client_service.dart';
@@ -110,19 +114,225 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   double get _totNonFatt  => _appointments.where((a) => !a.fatturato).fold(0, (s, a) => s + a.totale);
   double get _totOre      => _appointments.fold(0, (s, a) => s + a.oreTotali);
 
+  String _formatCurrency(double v) =>
+      NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
+
+  // ── GENERA PDF: solo appuntamenti NON FATTURATI del cliente ──────────────
+  Future<void> _generatePdf() async {
+    if (_selectedClient == null) return;
+
+    final List<Appointment> pdfData = _appointments.where((a) => !a.fatturato).toList();
+
+    if (pdfData.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nessun pagamento non fatturato da esportare'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final clienteNome = _selectedClient!.fullName;
+    final totale = pdfData.fold(0.0, (s, a) => s + a.totale);
+    final totNonPagato = pdfData.where((a) => !a.pagato).fold(0.0, (s, a) => s + a.totale);
+    final totPagato    = pdfData.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
+
+    String periodoLabel;
+    switch (_periodoType) {
+      case 'mese':   periodoLabel = '${_monthName(_selectedMonth)} $_selectedYear'; break;
+      case 'anno':   periodoLabel = '$_selectedYear'; break;
+      case 'custom': periodoLabel =
+          '${DateFormat('dd/MM/yyyy').format(_customFrom!)} – ${DateFormat('dd/MM/yyyy').format(_customTo!)}'; break;
+      default:       periodoLabel = 'Sempre';
+    }
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.all(32),
+        header: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Pagamenti Non Fatturati',
+                        style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                    pw.SizedBox(height: 4),
+                    pw.Text('Cliente: $clienteNome  •  $periodoLabel',
+                        style: pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
+                  ],
+                ),
+                pw.Text(
+                  'Generato il ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+                  style: pw.TextStyle(fontSize: 9, color: PdfColors.grey400),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+            pw.Divider(color: PdfColors.grey300),
+            pw.SizedBox(height: 4),
+            // Riepilogo metriche
+            pw.Row(
+              children: [
+                _pdfMetric('Appuntamenti', '${pdfData.length}', PdfColors.blueGrey700),
+                pw.SizedBox(width: 12),
+                _pdfMetric('Totale', _formatCurrency(totale), PdfColors.teal700),
+                pw.SizedBox(width: 12),
+                _pdfMetric('Non pagato', _formatCurrency(totNonPagato), PdfColors.red700),
+                pw.SizedBox(width: 12),
+                _pdfMetric('Pagato', _formatCurrency(totPagato), PdfColors.green700),
+              ],
+            ),
+            pw.SizedBox(height: 12),
+          ],
+        ),
+        build: (ctx) => [
+          pw.Table(
+            border: pw.TableBorder(
+              horizontalInside: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
+              top: pw.BorderSide(color: PdfColors.grey300),
+              bottom: pw.BorderSide(color: PdfColors.grey300),
+            ),
+            columnWidths: {
+              0: pw.FlexColumnWidth(1.4),  // Data
+              1: pw.FlexColumnWidth(2.2),  // Titolo
+              2: pw.FlexColumnWidth(1.4),  // Persona
+              3: pw.FlexColumnWidth(0.7),  // Ore
+              4: pw.FlexColumnWidth(0.9),  // Tariffa
+              5: pw.FlexColumnWidth(0.8),  // Pag.
+              6: pw.FlexColumnWidth(1.1),  // Importo
+            },
+            children: [
+              // Header
+              pw.TableRow(
+                decoration: pw.BoxDecoration(color: PdfColors.grey100),
+                children: ['Data', 'Titolo', 'Persona', 'Ore', 'Tariffa', 'Pag.', 'Importo']
+                    .map((h) => pw.Padding(
+                          padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          child: pw.Text(h,
+                              style: pw.TextStyle(
+                                  fontWeight: pw.FontWeight.bold,
+                                  fontSize: 9,
+                                  color: PdfColors.grey700)),
+                        ))
+                    .toList(),
+              ),
+              // Righe dati
+              ...pdfData.map((a) {
+                final persona = _userNames[a.userId] ?? a.userId;
+                return pw.TableRow(
+                  children: [
+                    _pdfCell('${DateFormat('dd/MM/yy').format(a.data)}\n${a.oraInizio}-${a.oraFine}'),
+                    _pdfCell(a.titolo),
+                    _pdfCell(persona),
+                    _pdfCell(a.oreTotali.toStringAsFixed(1)),
+                    _pdfCell('${a.tariffa.toStringAsFixed(0)}€/h'),
+                    _pdfCellColor(a.pagato ? 'Sì' : 'No',
+                        a.pagato ? PdfColors.green700 : PdfColors.red700),
+                    _pdfCell(_formatCurrency(a.totale), bold: true),
+                  ],
+                );
+              }),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+          // Totale
+          pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Container(
+              padding: pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey900,
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.Text(
+                'TOTALE DA FATTURARE  ${_formatCurrency(totale)}',
+                style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 13,
+                    color: PdfColors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final safeName = clienteNome.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
+    await Printing.layoutPdf(
+      onLayout: (fmt) async => doc.save(),
+      name: 'non_fatturati_${safeName}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+    );
+  }
+
+  pw.Widget _pdfMetric(String label, String value, PdfColor color) =>
+      pw.Expanded(
+        child: pw.Container(
+          padding: pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.grey50,
+            borderRadius: pw.BorderRadius.circular(4),
+            border: pw.Border.all(color: PdfColors.grey200),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(label, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
+              pw.SizedBox(height: 2),
+              pw.Text(value, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
+            ],
+          ),
+        ),
+      );
+
+  pw.Widget _pdfCell(String text, {bool bold = false}) => pw.Padding(
+        padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: pw.Text(text,
+            style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal),
+            maxLines: 2),
+      );
+
+  pw.Widget _pdfCellColor(String text, PdfColor color) => pw.Padding(
+        padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        child: pw.Text(text,
+            style: pw.TextStyle(
+                fontSize: 9, color: color, fontWeight: pw.FontWeight.bold)),
+      );
+
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     final auth    = Provider.of<AuthService>(context);
     final isAdmin = auth.currentUser?.isAdmin ?? false;
 
+    // Controlla se ci sono non-fatturati per abilitare il bottone PDF
+    final hasNonFatturati = _appointments.any((a) => !a.fatturato);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Report Cliente')),
+      appBar: AppBar(
+        title: const Text('Report Cliente'),
+        actions: [
+          if (hasNonFatturati)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Esporta PDF non fatturati',
+              onPressed: _generatePdf,
+            ),
+        ],
+      ),
       drawer: AppDrawer(),
       body: Column(
         children: [
 
-          // ── PANNELLO FILTRI ──────────────────────────────────────
+          // ── PANNELLO FILTRI ────────────────────────────────────────
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -149,86 +359,84 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // Riga 2: periodo chips + selettori (wrappati)
-// Riga 2a: chips periodo
-Row(
-  children: [
-    _periodoChip('mese',   'Mese',   primary),
-    const SizedBox(width: 6),
-    _periodoChip('anno',   'Anno',   primary),
-    const SizedBox(width: 6),
-    _periodoChip('sempre', 'Sempre', primary),
-    const SizedBox(width: 6),
-    _periodoChip('custom', 'Custom', primary),
-  ],
-),
-const SizedBox(height: 8),
+                // Riga 2a: chips periodo
+                Row(
+                  children: [
+                    _periodoChip('mese',   'Mese',   primary),
+                    const SizedBox(width: 6),
+                    _periodoChip('anno',   'Anno',   primary),
+                    const SizedBox(width: 6),
+                    _periodoChip('sempre', 'Sempre', primary),
+                    const SizedBox(width: 6),
+                    _periodoChip('custom', 'Custom', primary),
+                  ],
+                ),
+                const SizedBox(height: 8),
 
-// Riga 2b: selettori data — SEPARATI dai chip, nessun overflow
-if (_periodoType == 'mese')
-  Row(children: [
-    Expanded(
-      flex: 3,
-      child: DropdownButtonFormField<int>(
-        value: _selectedMonth,
-        isDense: true,
-        decoration: InputDecoration(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        ),
-        items: List.generate(12, (i) => DropdownMenuItem(
-            value: i + 1, child: Text(_monthName(i + 1), overflow: TextOverflow.ellipsis))),
-        onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
-      ),
-    ),
-    const SizedBox(width: 8),
-    Expanded(
-      flex: 2,
-      child: DropdownButtonFormField<int>(
-        value: _selectedYear,
-        isDense: true,
-        decoration: InputDecoration(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        ),
-        items: List.generate(8, (i) => DropdownMenuItem(
-            value: 2024 + i, child: Text('${2024 + i}'))),
-        onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
-      ),
-    ),
-  ]),
+                // Riga 2b: selettori data
+                if (_periodoType == 'mese')
+                  Row(children: [
+                    Expanded(
+                      flex: 3,
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedMonth,
+                        isDense: true,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        ),
+                        items: List.generate(12, (i) => DropdownMenuItem(
+                            value: i + 1, child: Text(_monthName(i + 1), overflow: TextOverflow.ellipsis))),
+                        onChanged: (v) { setState(() => _selectedMonth = v!); _applyLocalFilters(); },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 2,
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedYear,
+                        isDense: true,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        ),
+                        items: List.generate(8, (i) => DropdownMenuItem(
+                            value: 2024 + i, child: Text('${2024 + i}'))),
+                        onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
+                      ),
+                    ),
+                  ]),
 
-if (_periodoType == 'anno')
-  Row(children: [
-    SizedBox(
-      width: 120,
-      child: DropdownButtonFormField<int>(
-        value: _selectedYear,
-        isDense: true,
-        decoration: InputDecoration(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        ),
-        items: List.generate(8, (i) => DropdownMenuItem(
-            value: 2024 + i, child: Text('${2024 + i}'))),
-        onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
-      ),
-    ),
-  ]),
+                if (_periodoType == 'anno')
+                  Row(children: [
+                    SizedBox(
+                      width: 120,
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedYear,
+                        isDense: true,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        ),
+                        items: List.generate(8, (i) => DropdownMenuItem(
+                            value: 2024 + i, child: Text('${2024 + i}'))),
+                        onChanged: (v) { setState(() => _selectedYear = v!); _applyLocalFilters(); },
+                      ),
+                    ),
+                  ]),
 
-if (_periodoType == 'custom')
-  Row(children: [
-    Expanded(child: _datePicker('Dal', _customFrom, (d) {
-      setState(() => _customFrom = d); _applyLocalFilters();
-    }, primary)),
-    const SizedBox(width: 8),
-    Expanded(child: _datePicker('Al', _customTo, (d) {
-      setState(() => _customTo = d); _applyLocalFilters();
-    }, primary)),
-  ]),
+                if (_periodoType == 'custom')
+                  Row(children: [
+                    Expanded(child: _datePicker('Dal', _customFrom, (d) {
+                      setState(() => _customFrom = d); _applyLocalFilters();
+                    }, primary)),
+                    const SizedBox(width: 8),
+                    Expanded(child: _datePicker('Al', _customTo, (d) {
+                      setState(() => _customTo = d); _applyLocalFilters();
+                    }, primary)),
+                  ]),
 
-const SizedBox(height: 8),
-
+                const SizedBox(height: 8),
 
                 // Riga 3: filtri stato
                 Wrap(
@@ -252,7 +460,7 @@ const SizedBox(height: 8),
 
           Divider(height: 1, color: Colors.grey.shade200),
 
-          // ── METRIC CARDS 4 box colorati ──────────────────────────
+          // ── METRIC CARDS ──────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -299,7 +507,7 @@ const SizedBox(height: 8),
               ),
             ),
 
-          // ── STATI VUOTI ────────────────────────────────────────────
+          // ── STATI VUOTI ──────────────────────────────────────────
           if (_loading)
             const Expanded(child: Center(child: CircularProgressIndicator())),
 
@@ -335,7 +543,7 @@ const SizedBox(height: 8),
               ],
             ))),
 
-          // ── TABELLA FULL ───────────────────────────────────────────
+          // ── TABELLA FULL ──────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Expanded(child: _buildTable(primary, isAdmin)),
         ],
@@ -343,7 +551,7 @@ const SizedBox(height: 8),
     );
   }
 
-  // ── METRIC BOX con progress bar ────────────────────────────────────────────
+  // ── METRIC BOX ──────────────────────────────────────────────────
   Widget _metricBox(String label, String value, IconData icon, Color color, double amount, double total) {
     final pct = (total > 0 && amount >= 0) ? (amount / total).clamp(0.0, 1.0) : 0.0;
     return Expanded(
@@ -390,7 +598,7 @@ const SizedBox(height: 8),
     );
   }
 
-  // ── TABELLA ────────────────────────────────────────────────────────────────
+  // ── TABELLA ──────────────────────────────────────────────────────
   Widget _buildTable(Color primary, bool isAdmin) {
     return LayoutBuilder(builder: (context, constraints) {
       return SingleChildScrollView(
@@ -427,7 +635,6 @@ const SizedBox(height: 8),
                   color: MaterialStateProperty.all(rowBg),
                   cells: [
 
-                    // Data
                     DataCell(Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,14 +646,12 @@ const SizedBox(height: 8),
                       ],
                     )),
 
-                    // Titolo
                     DataCell(SizedBox(
                       width: 160,
                       child: Text(apt.titolo, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     )),
 
-                    // Persona
                     DataCell(Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -465,15 +670,12 @@ const SizedBox(height: 8),
                       ],
                     )),
 
-                    // Ore
                     DataCell(Text(apt.oreTotali.toStringAsFixed(1),
                         style: const TextStyle(fontSize: 13))),
 
-                    // Tariffa
                     DataCell(Text('${apt.tariffa.toStringAsFixed(0)}€/h',
                         style: TextStyle(fontSize: 12, color: Colors.grey[500]))),
 
-                    // Totale
                     DataCell(Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
