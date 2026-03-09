@@ -143,146 +143,223 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         final label = '${_monthName(now.month)} ${now.year}';
         return (start, end, label);
       default: // tutti
-        return (DateTime(2000), DateTime(2099), 'Tutti');
+        return (DateTime(2000), DateTime(2099), 'Tutti i periodi');
     }
   }
 
-  // ── GENERA E SCARICA PDF ─────────────────────────────────────────
+  // ── GENERA E SCARICA PDF CON LAYOUT PROFESSIONALE ────────────────
   Future<void> _generatePdf() async {
     if (_selectedClient == null) return;
 
     final (start, end, periodoLabel) = _pdfRange();
 
+    // FILTRO: solo appuntamenti NON eliminati E NON fatturati nel range
     final List<Appointment> pdfData = _allFetched.where((a) {
       if (a.deleted == true) return false;
+      if (a.fatturato == true) return false; // ← ESCLUDI FATTURATI
       if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
-      return !a.fatturato;
+      return true;
     }).toList()
       ..sort((a, b) => a.data.compareTo(b.data));
 
     if (pdfData.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Nessun pagamento non fatturato ($periodoLabel)'),
-          duration: const Duration(seconds: 2),
+          content: Text('Nessun appuntamento non fatturato in "$periodoLabel"'),
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
     final clienteNome  = _selectedClient!.fullName;
-    final totale       = pdfData.fold(0.0, (s, a) => s + a.totale);
-    final totNonPagato = pdfData.where((a) => !a.pagato).fold(0.0, (s, a) => s + a.totale);
-    final totPagato    = pdfData.where((a) =>  a.pagato).fold(0.0, (s, a) => s + a.totale);
+    final dataOggi     = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    final totaleImporto = pdfData.fold(0.0, (s, a) => s + a.totale);
+    final totPagato     = pdfData.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
+    final totNonPagato  = totaleImporto - totPagato;
 
     final doc = pw.Document();
+
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        header: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('Pagamenti Non Fatturati',
-                        style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                    pw.SizedBox(height: 4),
-                    pw.Text('Cliente: $clienteNome  •  $periodoLabel',
-                        style: pw.TextStyle(fontSize: 11, color: PdfColors.grey600)),
-                  ],
-                ),
-                pw.Text(
-                  'Generato il ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
-                  style: pw.TextStyle(fontSize: 9, color: PdfColors.grey400),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 8),
-            pw.Divider(color: PdfColors.grey300),
-            pw.SizedBox(height: 6),
-            pw.Row(
-              children: [
-                _pdfMetric('Appuntamenti', '${pdfData.length}', PdfColors.blueGrey700),
-                pw.SizedBox(width: 10),
-                _pdfMetric('Totale', _formatCurrency(totale), PdfColors.teal700),
-                pw.SizedBox(width: 10),
-                _pdfMetric('Non pagato', _formatCurrency(totNonPagato), PdfColors.red700),
-                pw.SizedBox(width: 10),
-                _pdfMetric('Pagato', _formatCurrency(totPagato), PdfColors.green700),
-              ],
-            ),
-            pw.SizedBox(height: 14),
-          ],
-        ),
-        build: (_) => [
+        margin: const pw.EdgeInsets.all(40),
+        build: (context) => [
+
+          // ── INTESTAZIONE ───────────────────────────────────────
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'PAGAMENTI NON FATTURATI',
+                style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 6),
+              pw.Container(
+                width: double.infinity,
+                height: 3,
+                color: PdfColors.teal600,
+              ),
+              pw.SizedBox(height: 16),
+
+              // Info cliente e periodo
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Cliente',
+                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                      pw.SizedBox(height: 3),
+                      pw.Text(clienteNome,
+                          style: pw.TextStyle(
+                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 10),
+                      pw.Text('Periodo',
+                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                      pw.SizedBox(height: 3),
+                      pw.Text(periodoLabel,
+                          style: const pw.TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text('Data generazione',
+                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                      pw.SizedBox(height: 3),
+                      pw.Text(dataOggi,
+                          style: const pw.TextStyle(fontSize: 12)),
+                      pw.SizedBox(height: 10),
+                      pw.Text('N. appuntamenti',
+                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600)),
+                      pw.SizedBox(height: 3),
+                      pw.Text('${pdfData.length}',
+                          style: pw.TextStyle(
+                              fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+
+              pw.SizedBox(height: 24),
+            ],
+          ),
+
+          // ── TABELLA APPUNTAMENTI ─────────────────────────────
           pw.Table(
-            border: pw.TableBorder(
-              horizontalInside: pw.BorderSide(color: PdfColors.grey200, width: 0.5),
-              top: pw.BorderSide(color: PdfColors.grey300),
-              bottom: pw.BorderSide(color: PdfColors.grey300),
-            ),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
             columnWidths: {
-              0: const pw.FlexColumnWidth(1.4),
-              1: const pw.FlexColumnWidth(2.2),
-              2: const pw.FlexColumnWidth(1.4),
-              3: const pw.FlexColumnWidth(0.7),
-              4: const pw.FlexColumnWidth(0.9),
-              5: const pw.FlexColumnWidth(0.8),
-              6: const pw.FlexColumnWidth(1.1),
+              0: const pw.FlexColumnWidth(1.2),   // Data
+              1: const pw.FlexColumnWidth(2.5),   // Descrizione
+              2: const pw.FlexColumnWidth(0.8),   // Ore
+              3: const pw.FlexColumnWidth(1.0),   // Tariffa
+              4: const pw.FlexColumnWidth(1.2),   // Importo
+              5: const pw.FlexColumnWidth(0.8),   // Pagato
             },
             children: [
+              // Header
               pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
-                children: ['Data', 'Titolo', 'Persona', 'Ore', 'Tariffa', 'Pag.', 'Importo']
-                    .map((h) => pw.Padding(
-                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                          child: pw.Text(h,
-                              style: pw.TextStyle(
-                                  fontWeight: pw.FontWeight.bold,
-                                  fontSize: 9,
-                                  color: PdfColors.grey700)),
-                        ))
-                    .toList(),
+                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                children: [
+                  _buildHeaderCell('Data'),
+                  _buildHeaderCell('Descrizione'),
+                  _buildHeaderCell('Ore', align: pw.TextAlign.center),
+                  _buildHeaderCell('Tariffa', align: pw.TextAlign.right),
+                  _buildHeaderCell('Importo', align: pw.TextAlign.right),
+                  _buildHeaderCell('Pagato', align: pw.TextAlign.center),
+                ],
               ),
+
+              // Righe dati
               ...pdfData.map((a) {
-                final persona = _userNames[a.userId] ?? a.userId;
+                final persona = _userNames[a.userId] ?? '';
+                final descrizione = a.titolo + (persona.isNotEmpty ? ' ($persona)' : '');
+                
                 return pw.TableRow(
                   children: [
-                    _pdfCell('${DateFormat('dd/MM/yy').format(a.data)}\n${a.oraInizio}-${a.oraFine}'),
-                    _pdfCell(a.titolo),
-                    _pdfCell(persona),
-                    _pdfCell(a.oreTotali.toStringAsFixed(1)),
-                    _pdfCell('${a.tariffa.toStringAsFixed(0)}€/h'),
-                    _pdfCellColor(a.pagato ? 'Sì' : 'No',
-                        a.pagato ? PdfColors.green700 : PdfColors.red700),
-                    _pdfCell(_formatCurrency(a.totale), bold: true),
+                    _buildDataCell(
+                      '${DateFormat('dd/MM/yy').format(a.data)}\n${a.oraInizio}-${a.oraFine}',
+                    ),
+                    _buildDataCell(descrizione),
+                    _buildDataCell(
+                      a.oreTotali.toStringAsFixed(1),
+                      align: pw.TextAlign.center,
+                    ),
+                    _buildDataCell(
+                      'EUR ${a.tariffa.toStringAsFixed(0)}',
+                      align: pw.TextAlign.right,
+                    ),
+                    _buildDataCell(
+                      'EUR ${a.totale.toStringAsFixed(2)}',
+                      align: pw.TextAlign.right,
+                      bold: true,
+                    ),
+                    _buildDataCell(
+                      a.pagato ? 'SI' : 'NO',
+                      align: pw.TextAlign.center,
+                      color: a.pagato ? PdfColors.green700 : PdfColors.red700,
+                      bold: true,
+                    ),
                   ],
                 );
               }),
             ],
           ),
-          pw.SizedBox(height: 16),
-          pw.Align(
+
+          pw.SizedBox(height: 20),
+
+          // ── RIEPILOGO TOTALI ─────────────────────────────────
+          pw.Container(
             alignment: pw.Alignment.centerRight,
             child: pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              width: 280,
+              padding: const pw.EdgeInsets.all(14),
               decoration: pw.BoxDecoration(
-                color: PdfColors.grey900,
+                border: pw.Border.all(color: PdfColors.grey400),
                 borderRadius: pw.BorderRadius.circular(6),
+                color: PdfColors.grey50,
               ),
-              child: pw.Text(
-                'TOTALE DA FATTURARE  ${_formatCurrency(totale)}',
-                style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 13,
-                    color: PdfColors.white),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _buildTotalRow('Totale importo:', 'EUR ${totaleImporto.toStringAsFixed(2)}'),
+                  pw.SizedBox(height: 6),
+                  pw.Divider(color: PdfColors.grey300, height: 1),
+                  pw.SizedBox(height: 6),
+                  _buildTotalRow('Già pagato:', 'EUR ${totPagato.toStringAsFixed(2)}',
+                      valueColor: PdfColors.green700),
+                  pw.SizedBox(height: 4),
+                  _buildTotalRow('Non pagato:', 'EUR ${totNonPagato.toStringAsFixed(2)}',
+                      valueColor: PdfColors.red700),
+                  pw.SizedBox(height: 10),
+                  pw.Divider(color: PdfColors.grey400, height: 2),
+                  pw.SizedBox(height: 10),
+                  _buildTotalRow(
+                    'DA FATTURARE:',
+                    'EUR ${totaleImporto.toStringAsFixed(2)}',
+                    labelBold: true,
+                    valueBold: true,
+                    labelSize: 11,
+                    valueSize: 14,
+                    valueColor: PdfColors.teal700,
+                  ),
+                ],
               ),
             ),
+          ),
+
+          pw.SizedBox(height: 30),
+
+          // ── FOOTER NOTE ──────────────────────────────────────
+          pw.Divider(color: PdfColors.grey300),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Documento generato automaticamente da HubGestion',
+            style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
           ),
         ],
       ),
@@ -300,49 +377,88 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         ..setAttribute('download', fileName)
         ..click();
       html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF scaricato: $fileName'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } else {
       // Mobile/Desktop: share sheet
       await Printing.sharePdf(bytes: bytes, filename: fileName);
     }
   }
 
-  pw.Widget _pdfMetric(String label, String value, PdfColor color) =>
-      pw.Expanded(
-        child: pw.Container(
-          padding: const pw.EdgeInsets.all(8),
-          decoration: pw.BoxDecoration(
-            color: PdfColors.grey50,
-            borderRadius: pw.BorderRadius.circular(4),
-            border: pw.Border.all(color: PdfColors.grey200),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(label, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
-              pw.SizedBox(height: 2),
-              pw.Text(value,
-                  style: pw.TextStyle(
-                      fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
-            ],
+  // ── HELPER PDF CELLS ─────────────────────────────────────────────
+  pw.Widget _buildHeaderCell(String text, {pw.TextAlign align = pw.TextAlign.left}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontWeight: pw.FontWeight.bold,
+          fontSize: 10,
+        ),
+        textAlign: align,
+      ),
+    );
+  }
+
+  pw.Widget _buildDataCell(
+    String text, {
+    pw.TextAlign align = pw.TextAlign.left,
+    bool bold = false,
+    PdfColor? color,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: 9,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+          color: color ?? PdfColors.black,
+        ),
+        textAlign: align,
+        maxLines: 3,
+      ),
+    );
+  }
+
+  pw.Widget _buildTotalRow(
+    String label,
+    String value, {
+    bool labelBold = false,
+    bool valueBold = false,
+    double labelSize = 10,
+    double valueSize = 10,
+    PdfColor? valueColor,
+  }) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: labelSize,
+            fontWeight: labelBold ? pw.FontWeight.bold : pw.FontWeight.normal,
           ),
         ),
-      );
-
-  pw.Widget _pdfCell(String text, {bool bold = false}) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-        child: pw.Text(text,
-            style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal),
-            maxLines: 2),
-      );
-
-  pw.Widget _pdfCellColor(String text, PdfColor color) => pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-        child: pw.Text(text,
-            style: pw.TextStyle(
-                fontSize: 9, color: color, fontWeight: pw.FontWeight.bold)),
-      );
+        pw.Text(
+          value,
+          style: pw.TextStyle(
+            fontSize: valueSize,
+            fontWeight: valueBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            color: valueColor ?? PdfColors.black,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
