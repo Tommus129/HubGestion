@@ -4,7 +4,6 @@ import '../services/auth_service.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/clients/clients_list_screen.dart';
 import '../screens/reports/payments_report_screen.dart';
-import '../screens/reports/overdue_report_screen.dart';
 import '../screens/reports/client_report_screen.dart';
 import '../screens/profile_screen.dart';
 
@@ -29,56 +28,38 @@ class AppDrawer extends StatelessWidget {
                   radius: 26,
                   backgroundColor: Colors.white.withOpacity(0.2),
                   child: Text(
-                    (user?.displayName ?? user?.email ?? 'U')
-                        .isNotEmpty
-                        ? (user?.displayName ?? user?.email ?? 'U')[0]
-                            .toUpperCase()
+                    (user?.displayName ?? user?.email ?? 'U').isNotEmpty
+                        ? (user?.displayName ?? user?.email ?? 'U')[0].toUpperCase()
                         : 'U',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                 ),
                 SizedBox(height: 8),
                 Text(
                   user?.displayName ?? user?.email ?? '',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15),
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                 ),
                 if (user?.email != null)
-                  Text(user!.email,
-                      style: TextStyle(
-                          color: Colors.white70, fontSize: 12)),
+                  Text(user!.email, style: TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
 
-          // Calendario
           ListTile(
             leading: Icon(Icons.calendar_month, color: primary),
             title: Text('Calendario'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => CalendarScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => CalendarScreen()));
             },
           ),
 
-          // Clienti
           ListTile(
             leading: Icon(Icons.people, color: primary),
             title: Text('Clienti'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => ClientsListScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ClientsListScreen()));
             },
           ),
 
@@ -86,68 +67,39 @@ class AppDrawer extends StatelessWidget {
           Padding(
             padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
             child: Text('Report', style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[500],
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.8)),
+                fontSize: 11, color: Colors.grey[500],
+                fontWeight: FontWeight.w600, letterSpacing: 0.8)),
           ),
 
-          // Report Pagamenti
           ListTile(
             leading: Icon(Icons.euro, color: Colors.green[600]),
             title: Text('Pagamenti'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => PaymentsReportScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PaymentsReportScreen()));
             },
           ),
 
-          // Report Insoluti (NEW)
-          ListTile(
-            leading: Icon(Icons.money_off, color: Colors.red[600]),
-            title: Text('Insoluti'),
-            subtitle: Text('Esporta PDF', style: TextStyle(fontSize: 11)),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => OverdueReportScreen()),
-              );
-            },
-          ),
-
-          // Report Cliente
           ListTile(
             leading: Icon(Icons.bar_chart, color: Colors.blue[600]),
             title: Text('Report Cliente'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => ClientReportScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ClientReportScreen()));
             },
           ),
 
           Divider(),
 
-          // Profilo
           ListTile(
             leading: Icon(Icons.person_outline, color: primary),
             title: Text('Profilo'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => ProfileScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfileScreen()));
             },
           ),
 
-          // Logout
           ListTile(
             leading: Icon(Icons.logout, color: Colors.red[400]),
             title: Text('Logout', style: TextStyle(color: Colors.red[400])),
