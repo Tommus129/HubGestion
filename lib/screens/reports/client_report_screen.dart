@@ -117,26 +117,53 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   String _formatCurrency(double v) =>
       NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
 
-  // ── GENERA PDF: solo appuntamenti NON FATTURATI del cliente ──────────────
+  // ── GENERA PDF: solo appuntamenti NON FATTURATI ──────────────────
   Future<void> _generatePdf() async {
     if (_selectedClient == null) return;
 
-    final List<Appointment> pdfData = _appointments.where((a) => !a.fatturato).toList();
+    // Prende TUTTI i non fatturati da _allFetched (ignora filtri UI su fatturato)
+    // ma rispetta il filtro periodo e pagato
+    DateTime start;
+    DateTime end;
+    switch (_periodoType) {
+      case 'mese':
+        start = DateTime(_selectedYear, _selectedMonth, 1);
+        end   = DateTime(_selectedYear, _selectedMonth + 1, 0, 23, 59, 59);
+        break;
+      case 'anno':
+        start = DateTime(_selectedYear, 1, 1);
+        end   = DateTime(_selectedYear, 12, 31, 23, 59, 59);
+        break;
+      case 'custom':
+        if (_customFrom == null || _customTo == null) return;
+        start = _customFrom!;
+        end   = DateTime(_customTo!.year, _customTo!.month, _customTo!.day, 23, 59, 59);
+        break;
+      default:
+        start = DateTime(2000); end = DateTime(2099);
+    }
+
+    final List<Appointment> pdfData = _allFetched.where((a) {
+      if (a.deleted == true) return false;
+      if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
+      return !a.fatturato; // SOLO non fatturati, sempre
+    }).toList()
+      ..sort((a, b) => a.data.compareTo(b.data));
 
     if (pdfData.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Nessun pagamento non fatturato da esportare'),
+          content: Text('Nessun pagamento non fatturato nel periodo selezionato'),
           duration: Duration(seconds: 2),
         ),
       );
       return;
     }
 
-    final clienteNome = _selectedClient!.fullName;
-    final totale = pdfData.fold(0.0, (s, a) => s + a.totale);
+    final clienteNome  = _selectedClient!.fullName;
+    final totale       = pdfData.fold(0.0, (s, a) => s + a.totale);
     final totNonPagato = pdfData.where((a) => !a.pagato).fold(0.0, (s, a) => s + a.totale);
-    final totPagato    = pdfData.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
+    final totPagato    = pdfData.where((a) =>  a.pagato).fold(0.0, (s, a) => s + a.totale);
 
     String periodoLabel;
     switch (_periodoType) {
@@ -151,7 +178,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(32),
         header: (ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
@@ -176,20 +203,19 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             ),
             pw.SizedBox(height: 8),
             pw.Divider(color: PdfColors.grey300),
-            pw.SizedBox(height: 4),
-            // Riepilogo metriche
+            pw.SizedBox(height: 6),
             pw.Row(
               children: [
                 _pdfMetric('Appuntamenti', '${pdfData.length}', PdfColors.blueGrey700),
-                pw.SizedBox(width: 12),
+                pw.SizedBox(width: 10),
                 _pdfMetric('Totale', _formatCurrency(totale), PdfColors.teal700),
-                pw.SizedBox(width: 12),
+                pw.SizedBox(width: 10),
                 _pdfMetric('Non pagato', _formatCurrency(totNonPagato), PdfColors.red700),
-                pw.SizedBox(width: 12),
+                pw.SizedBox(width: 10),
                 _pdfMetric('Pagato', _formatCurrency(totPagato), PdfColors.green700),
               ],
             ),
-            pw.SizedBox(height: 12),
+            pw.SizedBox(height: 14),
           ],
         ),
         build: (ctx) => [
@@ -200,21 +226,20 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               bottom: pw.BorderSide(color: PdfColors.grey300),
             ),
             columnWidths: {
-              0: pw.FlexColumnWidth(1.4),  // Data
-              1: pw.FlexColumnWidth(2.2),  // Titolo
-              2: pw.FlexColumnWidth(1.4),  // Persona
-              3: pw.FlexColumnWidth(0.7),  // Ore
-              4: pw.FlexColumnWidth(0.9),  // Tariffa
-              5: pw.FlexColumnWidth(0.8),  // Pag.
-              6: pw.FlexColumnWidth(1.1),  // Importo
+              0: const pw.FlexColumnWidth(1.4),
+              1: const pw.FlexColumnWidth(2.2),
+              2: const pw.FlexColumnWidth(1.4),
+              3: const pw.FlexColumnWidth(0.7),
+              4: const pw.FlexColumnWidth(0.9),
+              5: const pw.FlexColumnWidth(0.8),
+              6: const pw.FlexColumnWidth(1.1),
             },
             children: [
-              // Header
               pw.TableRow(
-                decoration: pw.BoxDecoration(color: PdfColors.grey100),
+                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
                 children: ['Data', 'Titolo', 'Persona', 'Ore', 'Tariffa', 'Pag.', 'Importo']
                     .map((h) => pw.Padding(
-                          padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                           child: pw.Text(h,
                               style: pw.TextStyle(
                                   fontWeight: pw.FontWeight.bold,
@@ -223,7 +248,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                         ))
                     .toList(),
               ),
-              // Righe dati
               ...pdfData.map((a) {
                 final persona = _userNames[a.userId] ?? a.userId;
                 return pw.TableRow(
@@ -242,11 +266,10 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             ],
           ),
           pw.SizedBox(height: 16),
-          // Totale
           pw.Align(
             alignment: pw.Alignment.centerRight,
             child: pw.Container(
-              padding: pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: pw.BoxDecoration(
                 color: PdfColors.grey900,
                 borderRadius: pw.BorderRadius.circular(6),
@@ -264,17 +287,18 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       ),
     );
 
+    // Salva i byte e forza il download (funziona su web E mobile)
+    final bytes = await doc.save();
     final safeName = clienteNome.replaceAll(RegExp(r'\s+'), '_').toLowerCase();
-    await Printing.layoutPdf(
-      onLayout: (fmt) async => doc.save(),
-      name: 'non_fatturati_${safeName}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
-    );
+    final fileName = 'non_fatturati_${safeName}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf';
+
+    await Printing.sharePdf(bytes: bytes, filename: fileName);
   }
 
   pw.Widget _pdfMetric(String label, String value, PdfColor color) =>
       pw.Expanded(
         child: pw.Container(
-          padding: pw.EdgeInsets.all(8),
+          padding: const pw.EdgeInsets.all(8),
           decoration: pw.BoxDecoration(
             color: PdfColors.grey50,
             borderRadius: pw.BorderRadius.circular(4),
@@ -285,14 +309,16 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
             children: [
               pw.Text(label, style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500)),
               pw.SizedBox(height: 2),
-              pw.Text(value, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
+              pw.Text(value,
+                  style: pw.TextStyle(
+                      fontSize: 11, fontWeight: pw.FontWeight.bold, color: color)),
             ],
           ),
         ),
       );
 
   pw.Widget _pdfCell(String text, {bool bold = false}) => pw.Padding(
-        padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         child: pw.Text(text,
             style: pw.TextStyle(
                 fontSize: 9,
@@ -301,7 +327,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       );
 
   pw.Widget _pdfCellColor(String text, PdfColor color) => pw.Padding(
-        padding: pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         child: pw.Text(text,
             style: pw.TextStyle(
                 fontSize: 9, color: color, fontWeight: pw.FontWeight.bold)),
@@ -313,17 +339,17 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final auth    = Provider.of<AuthService>(context);
     final isAdmin = auth.currentUser?.isAdmin ?? false;
 
-    // Controlla se ci sono non-fatturati per abilitare il bottone PDF
-    final hasNonFatturati = _appointments.any((a) => !a.fatturato);
+    // Bottone PDF visibile se c'e' almeno 1 appuntamento caricato (non fatturati calcolati al click)
+    final hasDati = _appointments.isNotEmpty || _allFetched.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Report Cliente'),
         actions: [
-          if (hasNonFatturati)
+          if (_selectedClient != null && hasDati)
             IconButton(
               icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Esporta PDF non fatturati',
+              tooltip: 'Esporta PDF (non fatturati)',
               onPressed: _generatePdf,
             ),
         ],
@@ -340,7 +366,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // Riga 1: cliente
                 DropdownButtonFormField<Client>(
                   value: _selectedClient,
                   decoration: InputDecoration(
@@ -359,7 +384,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // Riga 2a: chips periodo
                 Row(
                   children: [
                     _periodoChip('mese',   'Mese',   primary),
@@ -373,7 +397,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // Riga 2b: selettori data
                 if (_periodoType == 'mese')
                   Row(children: [
                     Expanded(
@@ -438,7 +461,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
                 const SizedBox(height: 8),
 
-                // Riga 3: filtri stato
                 Wrap(
                   spacing: 6, runSpacing: 6,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -460,7 +482,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
           Divider(height: 1, color: Colors.grey.shade200),
 
-          // ── METRIC CARDS ──────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -481,7 +502,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ),
             ),
 
-          // ── HEADER TABELLA ─────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -507,7 +527,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ),
             ),
 
-          // ── STATI VUOTI ──────────────────────────────────────────
           if (_loading)
             const Expanded(child: Center(child: CircularProgressIndicator())),
 
@@ -543,7 +562,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ],
             ))),
 
-          // ── TABELLA FULL ──────────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Expanded(child: _buildTable(primary, isAdmin)),
         ],
@@ -551,7 +569,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     );
   }
 
-  // ── METRIC BOX ──────────────────────────────────────────────────
   Widget _metricBox(String label, String value, IconData icon, Color color, double amount, double total) {
     final pct = (total > 0 && amount >= 0) ? (amount / total).clamp(0.0, 1.0) : 0.0;
     return Expanded(
@@ -598,7 +615,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     );
   }
 
-  // ── TABELLA ──────────────────────────────────────────────────────
   Widget _buildTable(Color primary, bool isAdmin) {
     return LayoutBuilder(builder: (context, constraints) {
       return SingleChildScrollView(
@@ -634,7 +650,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 return DataRow(
                   color: MaterialStateProperty.all(rowBg),
                   cells: [
-
                     DataCell(Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -645,13 +660,11 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                             style: TextStyle(fontSize: 10, color: Colors.grey[400])),
                       ],
                     )),
-
                     DataCell(SizedBox(
                       width: 160,
                       child: Text(apt.titolo, overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     )),
-
                     DataCell(Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -669,13 +682,10 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                         ),
                       ],
                     )),
-
                     DataCell(Text(apt.oreTotali.toStringAsFixed(1),
                         style: const TextStyle(fontSize: 13))),
-
                     DataCell(Text('${apt.tariffa.toStringAsFixed(0)}€/h',
                         style: TextStyle(fontSize: 12, color: Colors.grey[500]))),
-
                     DataCell(Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
@@ -685,8 +695,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       child: Text(DateHelpers.formatCurrency(apt.totale),
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                     )),
-
-                    // Fatturato
                     DataCell(Tooltip(
                       message: isAdmin
                           ? (apt.fatturato ? 'Annulla fatturazione' : 'Segna fatturato')
@@ -710,23 +718,16 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                             ),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(
-                              apt.fatturato ? Icons.check : Icons.circle_outlined,
-                              size: 12,
-                              color: apt.fatturato ? Colors.orange[700] : Colors.grey[400],
-                            ),
+                            Icon(apt.fatturato ? Icons.check : Icons.circle_outlined,
+                                size: 12, color: apt.fatturato ? Colors.orange[700] : Colors.grey[400]),
                             const SizedBox(width: 4),
                             Text(apt.fatturato ? 'Sì' : 'No',
-                                style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w600,
-                                  color: apt.fatturato ? Colors.orange[700] : Colors.grey[400],
-                                )),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                                    color: apt.fatturato ? Colors.orange[700] : Colors.grey[400])),
                           ]),
                         ),
                       ),
                     )),
-
-                    // Pagato
                     DataCell(Tooltip(
                       message: apt.pagato ? 'Annulla pagamento' : 'Segna pagato',
                       child: InkWell(
@@ -748,17 +749,12 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                             ),
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(
-                              apt.pagato ? Icons.check : Icons.circle_outlined,
-                              size: 12,
-                              color: apt.pagato ? Colors.green[700] : Colors.grey[400],
-                            ),
+                            Icon(apt.pagato ? Icons.check : Icons.circle_outlined,
+                                size: 12, color: apt.pagato ? Colors.green[700] : Colors.grey[400]),
                             const SizedBox(width: 4),
                             Text(apt.pagato ? 'Sì' : 'No',
-                                style: TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.w600,
-                                  color: apt.pagato ? Colors.green[700] : Colors.grey[400],
-                                )),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                                    color: apt.pagato ? Colors.green[700] : Colors.grey[400])),
                           ]),
                         ),
                       ),
