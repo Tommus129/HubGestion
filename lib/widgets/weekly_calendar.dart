@@ -7,7 +7,6 @@ import '../services/appointment_service.dart';
 import '../services/room_service.dart';
 import '../services/auth_service.dart';
 
-// Quanti appuntamenti mostrare "espansi" prima di collassare in badge
 const int _kMaxVisible = 3;
 
 class WeeklyCalendar extends StatefulWidget {
@@ -104,7 +103,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
   Color  _uColor(String uid) => _userColors[uid] ?? _generateUserColor(uid);
   String _cName(String cid)  => _clientNames[cid] ?? '';
-  Color _rColor(String? id) {
+  Color  _rColor(String? id) {
     if (id == null || !_rooms.containsKey(id)) return Colors.grey;
     try {
       return Color(int.parse('FF${_rooms[id]!.color.replaceAll('#', '')}', radix: 16));
@@ -138,9 +137,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       _toMin(a.oraInizio) < _toMin(b.oraFine) &&
       _toMin(a.oraFine)   > _toMin(b.oraInizio);
 
-  // ── NUOVO LAYOUT ENGINE ─────────────────────────────────────────────────
-  // Restituisce per ogni appuntamento: colonna assegnata e totale colonne
-  // del suo cluster. Usa l'algoritmo "interval graph coloring" (greedy).
   Map<String, _SlotLayout> _computeLayout(List<Appointment> apts) {
     final result = <String, _SlotLayout>{};
     if (apts.isEmpty) return result;
@@ -150,66 +146,45 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       return cmp != 0 ? cmp : b.oraFine.compareTo(a.oraFine);
     });
 
-    // 1. Raggruppa in cluster di sovrapposti
     final clusters = <List<Appointment>>[];
     for (final apt in sorted) {
       bool added = false;
       for (final cluster in clusters) {
         if (cluster.any((c) => _overlaps(c, apt))) {
-          cluster.add(apt);
-          added = true;
-          break;
+          cluster.add(apt); added = true; break;
         }
       }
       if (!added) clusters.add([apt]);
     }
 
-    // 2. Per ogni cluster: greedy column assignment
     for (final cluster in clusters) {
       final n = cluster.length;
-
       if (n <= _kMaxVisible) {
-        // Pochi appuntamenti -> layout classico a colonne uguali
         for (int i = 0; i < n; i++) {
-          final key = cluster[i].id ?? cluster[i].titolo;
-          result[key] = _SlotLayout(
-            colIndex: i,
-            colCount: n,
-            isOverflow: false,
-            overflowCount: 0,
-            overflowApts: [],
+          result[cluster[i].id ?? cluster[i].titolo] = _SlotLayout(
+            colIndex: i, colCount: n,
+            isOverflow: false, overflowCount: 0, overflowApts: [],
           );
         }
       } else {
-        // Molti appuntamenti -> mostra solo i primi _kMaxVisible,
-        // l'ultimo slot visibile diventa il badge "+N"
         final visible  = cluster.sublist(0, _kMaxVisible - 1);
         final overflow = cluster.sublist(_kMaxVisible - 1);
-
         for (int i = 0; i < visible.length; i++) {
-          final key = visible[i].id ?? visible[i].titolo;
-          result[key] = _SlotLayout(
-            colIndex: i,
-            colCount: _kMaxVisible,
-            isOverflow: false,
-            overflowCount: 0,
-            overflowApts: [],
+          result[visible[i].id ?? visible[i].titolo] = _SlotLayout(
+            colIndex: i, colCount: _kMaxVisible,
+            isOverflow: false, overflowCount: 0, overflowApts: [],
           );
         }
-        // Placeholder badge per l'ultimo slot
-        // Usiamo l'id del primo appuntamento overflow come chiave badge
-        final badgeKey = '__badge__${cluster.first.id ?? cluster.first.titolo}';
-        result[badgeKey] = _SlotLayout(
+        result['__badge__${cluster.first.id ?? cluster.first.titolo}'] = _SlotLayout(
           colIndex: _kMaxVisible - 1,
           colCount: _kMaxVisible,
           isOverflow: true,
           overflowCount: overflow.length,
           overflowApts: overflow,
-          // posizione verticale: prendi il range del cluster
-          clusterOraInizio: cluster.map((a) => a.oraInizio).reduce(
-              (a, b) => _toMin(a) < _toMin(b) ? a : b),
-          clusterOraFine: cluster.map((a) => a.oraFine).reduce(
-              (a, b) => _toMin(a) > _toMin(b) ? a : b),
+          clusterOraInizio: cluster.map((a) => a.oraInizio)
+              .reduce((a, b) => _toMin(a) < _toMin(b) ? a : b),
+          clusterOraFine: cluster.map((a) => a.oraFine)
+              .reduce((a, b) => _toMin(a) > _toMin(b) ? a : b),
         );
       }
     }
@@ -219,9 +194,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
   List<Appointment> _applyFilters(List<Appointment> apts) {
     return apts.where((a) {
       if (widget.filterUserId != null) {
-        final match = a.userId == widget.filterUserId ||
-            a.workerIds.contains(widget.filterUserId);
-        if (!match) return false;
+        if (a.userId != widget.filterUserId &&
+            !a.workerIds.contains(widget.filterUserId)) return false;
       }
       if (widget.filterRoomId   != null && a.roomId   != widget.filterRoomId)   return false;
       if (widget.filterClientId != null && a.clientId != widget.filterClientId) return false;
@@ -229,7 +203,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     }).toList();
   }
 
-  // ── CONTENT CARD ────────────────────────────────────────────────────────
+  // ── CARD CALENDAR CONTENT ──────────────────────────────────────────────────
   Widget _aptContent({
     required Appointment apt,
     required double cardH,
@@ -242,7 +216,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     final isShort  = cardH < 46.0;
     final isNarrow = colCount >= 3;
     final timeText = isNarrow ? apt.oraInizio : '${apt.oraInizio} - ${apt.oraFine}';
-    final title    = (canSee && clienteNome.isNotEmpty) ? clienteNome : apt.titolo;
+    // clienteNome come riga principale, titolo sempre visibile sotto
+    final mainLine = (canSee && clienteNome.isNotEmpty) ? clienteNome : apt.titolo;
+    // mostra titolo separato solo se è diverso da mainLine
+    final showTitle = canSee && clienteNome.isNotEmpty &&
+        apt.titolo.isNotEmpty && apt.titolo != clienteNome;
     final roomName = room?.name.toUpperCase() ?? '';
 
     return OverflowBox(
@@ -252,10 +230,10 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: isNarrow ? 4 : 6,
-          vertical:   4,
+          vertical: 4,
         ),
         child: isShort
-            // ── Layout compresso (< 46px) ──
+            // ─ Card compressa (altezza < 46px) ─
             ? Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -265,7 +243,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                           color: Colors.black87)),
                   const SizedBox(width: 3),
                   Flexible(
-                    child: Text(title,
+                    child: Text(mainLine,
                         style: TextStyle(
                             fontSize: isNarrow ? 9 : 11,
                             fontWeight: FontWeight.w600,
@@ -273,14 +251,25 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                   ),
+                  // icone stato anche su card corta se c'è spazio
+                  if (canSee && !isNarrow) ...[
+                    const SizedBox(width: 3),
+                    if (apt.note != null && apt.note!.trim().isNotEmpty)
+                      Icon(Icons.sticky_note_2, size: 9,
+                          color: Colors.amber.shade700),
+                    Icon(
+                      apt.pagato ? Icons.check_circle : Icons.radio_button_unchecked,
+                      size: 9,
+                      color: apt.pagato ? Colors.green.shade600 : Colors.black26),
+                  ],
                 ],
               )
-            // ── Layout normale ──
+            // ─ Card normale ─
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Orario + icone stato
+                  // Riga orario + icone stato
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -288,8 +277,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                           style: const TextStyle(
                               fontSize: 9, fontWeight: FontWeight.w600,
                               color: Colors.black54)),
-                      if (canSee && !isNarrow) ...[
-                        const SizedBox(width: 4),
+                      const SizedBox(width: 4),
+                      if (canSee) ...[
+                        // Nota presente
+                        if (apt.note != null && apt.note!.trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 2),
+                            child: Icon(Icons.sticky_note_2, size: 9,
+                                color: Colors.amber.shade700),
+                          ),
+                        // Fatturato
                         Icon(
                           apt.fatturato
                               ? Icons.receipt_long
@@ -299,8 +296,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               ? Colors.orange.shade700
                               : Colors.black26),
                         const SizedBox(width: 2),
+                        // Pagato
                         Icon(
-                          apt.pagato ? Icons.check_circle : Icons.cancel,
+                          apt.pagato ? Icons.check_circle : Icons.radio_button_unchecked,
                           size: 9,
                           color: apt.pagato
                               ? Colors.green.shade600
@@ -309,17 +307,26 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  // Titolo
-                  Text(title,
+                  // Nome cliente (riga principale)
+                  Text(mainLine,
                       style: TextStyle(
                           fontSize: isNarrow ? 10 : 12,
                           fontWeight: FontWeight.w700,
                           color: Colors.black87),
-                      maxLines: isNarrow ? 1 : 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis),
-                  // Stanza
+                  // Titolo appuntamento (sempre, se diverso dal cliente)
+                  if (showTitle)
+                    Text(apt.titolo,
+                        style: TextStyle(
+                            fontSize: isNarrow ? 9 : 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black54),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  // Stanza + importo
                   if (!isNarrow && canSee && room != null) ...[
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -327,16 +334,14 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         const SizedBox(width: 3),
                         Text(roomName,
                             style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 9, fontWeight: FontWeight.bold,
                                 color: rColor),
                             maxLines: 1),
                         if (colCount == 1) ...[
                           const SizedBox(width: 4),
                           Text('EUR ${apt.totale.toStringAsFixed(0)}',
                               style: const TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 9, fontWeight: FontWeight.w600,
                                   color: Colors.black45)),
                         ],
                       ],
@@ -348,16 +353,14 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  // ── BADGE OVERFLOW ──────────────────────────────────────────────────────
+  // ── BADGE OVERFLOW ─────────────────────────────────────────────────
   Widget _buildOverflowBadge({
     required _SlotLayout slot,
     required double cardH,
     required Color primary,
   }) {
-    final colors = slot.overflowApts
-        .map((a) => _uColor(a.userId))
-        .toList();
-    final count = slot.overflowCount;
+    final colors = slot.overflowApts.map((a) => _uColor(a.userId)).toList();
+    final count  = slot.overflowCount;
 
     return GestureDetector(
       onTap: () => _showOverflowSheet(slot.overflowApts, primary),
@@ -369,16 +372,13 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
           border: Border.all(color: Colors.grey.shade300),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            ),
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 3, offset: const Offset(0, 1)),
           ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Pallini colorati
             if (cardH > 32)
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
@@ -386,153 +386,178 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     ...colors.take(4).map((c) => Container(
-                          width: 7,
-                          height: 7,
+                          width: 7, height: 7,
                           margin: const EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
-                            color: c,
-                            shape: BoxShape.circle,
-                          ),
+                              color: c, shape: BoxShape.circle),
                         )),
                     if (colors.length > 4)
                       Container(
                         width: 7, height: 7,
                         margin: const EdgeInsets.symmetric(horizontal: 1),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade400,
-                          shape: BoxShape.circle,
-                        ),
+                            color: Colors.grey.shade400,
+                            shape: BoxShape.circle),
                       ),
                   ],
                 ),
               ),
-            Text(
-              '+$count',
-              style: TextStyle(
-                fontSize: cardH > 32 ? 13 : 10,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            if (cardH > 40)
-              Text(
-                'altro',
+            Text('+$count',
                 style: TextStyle(
-                  fontSize: 9,
-                  color: Colors.grey.shade500,
-                ),
-              ),
+                    fontSize: cardH > 32 ? 13 : 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700)),
+            if (cardH > 40)
+              Text('altro',
+                  style: TextStyle(
+                      fontSize: 9, color: Colors.grey.shade500)),
           ],
         ),
       ),
     );
   }
 
-  // ── OVERFLOW BOTTOM SHEET ───────────────────────────────────────────────
+  // ── BOTTOM SHEET OVERFLOW ───────────────────────────────────────────
   void _showOverflowSheet(List<Appointment> apts, Color primary) {
     final me = Provider.of<AuthService>(context, listen: false).currentUser;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.75,
-        ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 8),
-                width: 40, height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (_) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.80,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius:
+                BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Row(
-                children: [
+              // Intestazione
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Row(children: [
                   Icon(Icons.event_note, color: primary, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'Altri ${apts.length} appuntamenti',
+                    'Altri ${apts.length} appuntament${apts.length == 1 ? 'o' : 'i'}',
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                ],
+                ]),
               ),
-            ),
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                itemCount: apts.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) {
-                  final apt      = apts[i];
-                  final uColor   = _uColor(apt.userId);
-                  final rColor   = _rColor(apt.roomId);
-                  final room     = _rooms[apt.roomId];
-                  final canSee   = apt.userId == me?.uid ||
-                      apt.workerIds.contains(me?.uid) ||
-                      (me?.isAdmin ?? false);
-                  final title    = canSee && _cName(apt.clientId).isNotEmpty
-                      ? _cName(apt.clientId)
-                      : apt.titolo;
-                  final colors   = _aptColors(apt);
+              // Lista
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                  itemCount: apts.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) {
+                    final apt    = apts[i];
+                    final uColor = _uColor(apt.userId);
+                    final rColor = _rColor(apt.roomId);
+                    final room   = _rooms[apt.roomId];
+                    final canSee = apt.userId == me?.uid ||
+                        apt.workerIds.contains(me?.uid) ||
+                        (me?.isAdmin ?? false);
+                    final clienteNome = canSee ? _cName(apt.clientId) : '';
+                    final colors = _aptColors(apt);
+                    final hasNote = apt.note != null &&
+                        apt.note!.trim().isNotEmpty;
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context);
-                      widget.onTapAppointment(apt);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: uColor.withOpacity(0.07),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: uColor.withOpacity(0.25)),
-                      ),
-                      child: Row(
-                        children: [
-                          // Indicatore colori lavoratori
-                          Column(
-                            children: colors
-                                .take(4)
-                                .map((c) => Container(
-                                      width: 4,
-                                      height: 12,
-                                      margin:
-                                          const EdgeInsets.only(bottom: 2),
-                                      decoration: BoxDecoration(
-                                        color: c,
-                                        borderRadius:
-                                            BorderRadius.circular(2),
-                                      ),
-                                    ))
-                                .toList(),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(title,
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        widget.onTapAppointment(apt);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: uColor.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                              Border.all(color: uColor.withOpacity(0.22)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Barra lavoratori (segmenti colorati)
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: colors
+                                  .take(5)
+                                  .map((c) => Container(
+                                        width: 4, height: 14,
+                                        margin: const EdgeInsets.only(
+                                            bottom: 2),
+                                        decoration: BoxDecoration(
+                                          color: c,
+                                          borderRadius:
+                                              BorderRadius.circular(2),
+                                        ),
+                                      ))
+                                  .toList(),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+
+                                  // ─ Titolo appuntamento ─
+                                  Text(
+                                    apt.titolo,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 14)),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
+                                        fontSize: 14),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+
+                                  // ─ Nome cliente (se diverso dal titolo) ─
+                                  if (canSee &&
+                                      clienteNome.isNotEmpty &&
+                                      clienteNome != apt.titolo) ...[
+                                    const SizedBox(height: 1),
+                                    Row(children: [
+                                      Icon(Icons.person_outline,
+                                          size: 11,
+                                          color: Colors.grey.shade500),
+                                      const SizedBox(width: 3),
+                                      Expanded(
+                                        child: Text(
+                                          clienteNome,
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade700),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ]),
+                                  ],
+
+                                  const SizedBox(height: 4),
+
+                                  // ─ Orario + Stanza ─
+                                  Row(children: [
                                     Icon(Icons.access_time,
                                         size: 11,
                                         color: Colors.grey.shade500),
@@ -548,29 +573,122 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                       Icon(Icons.meeting_room,
                                           size: 11, color: rColor),
                                       const SizedBox(width: 3),
-                                      Text(room.name,
+                                      Flexible(
+                                        child: Text(
+                                          room.name,
                                           style: TextStyle(
                                               fontSize: 11,
                                               color: rColor,
-                                              fontWeight: FontWeight.w600)),
+                                              fontWeight: FontWeight.w600),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
                                     ],
+                                  ]),
+
+                                  const SizedBox(height: 5),
+
+                                  // ─ Stato pagamento + fattura ─
+                                  if (canSee)
+                                    Row(children: [
+                                      _sheetChip(
+                                        icon: Icons.receipt_long,
+                                        label: 'Fatturato',
+                                        active: apt.fatturato,
+                                        activeColor: Colors.orange.shade700,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _sheetChip(
+                                        icon: Icons.check_circle,
+                                        label: 'Pagato',
+                                        active: apt.pagato,
+                                        activeColor: Colors.green.shade600,
+                                      ),
+                                      if (hasNote) ...[
+                                        const SizedBox(width: 6),
+                                        _sheetChip(
+                                          icon: Icons.sticky_note_2,
+                                          label: 'Note',
+                                          active: true,
+                                          activeColor: Colors.amber.shade700,
+                                        ),
+                                      ],
+                                    ]),
+
+                                  // ─ Testo note (se presenti) ─
+                                  if (canSee && hasNote) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade50,
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        border: Border.all(
+                                            color: Colors.amber.shade200),
+                                      ),
+                                      child: Text(
+                                        apt.note!,
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.brown.shade700,
+                                            height: 1.4),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                   ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          Icon(Icons.chevron_right,
-                              color: Colors.grey.shade400),
-                        ],
+                            const SizedBox(width: 6),
+                            Icon(Icons.chevron_right,
+                                color: Colors.grey.shade400, size: 20),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Chip compatta per stato nel bottom sheet
+  Widget _sheetChip({
+    required IconData icon,
+    required String label,
+    required bool active,
+    required Color activeColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: active
+            ? activeColor.withOpacity(0.12)
+            : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: active ? activeColor.withOpacity(0.4) : Colors.grey.shade300,
         ),
       ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon,
+            size: 10,
+            color: active ? activeColor : Colors.grey.shade400),
+        const SizedBox(width: 3),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: active ? activeColor : Colors.grey.shade400)),
+      ]),
     );
   }
 
@@ -591,7 +709,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
           return Column(children: [
 
-            // ── HEADER ────────────────────────────────────────────
+            // ── HEADER ──────────────────────────────────────────
             Row(children: [
               Container(width: _timeW, height: 56, color: Colors.white),
               ..._days.map((d) {
@@ -599,7 +717,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                 return Container(
                   width: dw, height: 56,
                   decoration: BoxDecoration(
-                    color: today ? primary.withOpacity(0.07) : Colors.white,
+                    color: today
+                        ? primary.withOpacity(0.07)
+                        : Colors.white,
                     border: Border(
                       left:   BorderSide(color: Colors.grey.shade200),
                       bottom: BorderSide(color: Colors.grey.shade300),
@@ -610,10 +730,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                     children: [
                       Text(_dn(d.weekday),
                           style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 0.8,
+                            fontSize: 10, letterSpacing: 0.8,
                             fontWeight: FontWeight.w700,
-                            color: today ? primary : Colors.grey.shade500,
+                            color: today
+                                ? primary
+                                : Colors.grey.shade500,
                           )),
                       const SizedBox(height: 3),
                       Container(
@@ -625,8 +746,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         alignment: Alignment.center,
                         child: Text('${d.day}',
                             style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 14, fontWeight: FontWeight.w600,
                               color: today ? Colors.white : Colors.black87,
                             )),
                       ),
@@ -636,7 +756,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
               }),
             ]),
 
-            // ── CORPO ─────────────────────────────────────────────
+            // ── CORPO ──────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 child: SizedBox(
@@ -649,9 +769,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                       SizedBox(
                         width: _timeW, height: totalH,
                         child: Stack(
-                          children: List.generate(
-                            _end - _start,
-                            (i) => Positioned(
+                          children: List.generate(_end - _start, (i) =>
+                            Positioned(
                               top: i * _hourH - 8, right: 6,
                               child: Text(
                                 '${(_start + i).toString().padLeft(2, '0')}:00',
@@ -676,19 +795,16 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         final layout = _computeLayout(dayApts);
 
                         return SizedBox(
-                          width: dw,
-                          height: totalH,
+                          width: dw, height: totalH,
                           child: ClipRect(
                             child: Stack(
                               clipBehavior: Clip.hardEdge,
                               children: [
 
-                                // Griglia
-                                ...List.generate(
-                                  _end - _start,
-                                  (i) => Positioned(
-                                    top: i * _hourH,
-                                    left: 0, right: 0,
+                                // Griglia ora
+                                ...List.generate(_end - _start, (i) =>
+                                  Positioned(
+                                    top: i * _hourH, left: 0, right: 0,
                                     height: _hourH,
                                     child: Container(
                                       decoration: BoxDecoration(
@@ -706,10 +822,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                   ),
                                 ),
 
-                                // Mezz'ora
-                                ...List.generate(
-                                  _end - _start,
-                                  (i) => Positioned(
+                                // Linea mezz'ora
+                                ...List.generate(_end - _start, (i) =>
+                                  Positioned(
                                     top: i * _hourH + _hourH / 2,
                                     left: 4, right: 0, height: 1,
                                     child: Container(
@@ -718,11 +833,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                 ),
 
                                 // Tap slot vuoto
-                                ...List.generate(
-                                  _end - _start,
-                                  (i) => Positioned(
-                                    top: i * _hourH,
-                                    left: 0, right: 0,
+                                ...List.generate(_end - _start, (i) =>
+                                  Positioned(
+                                    top: i * _hourH, left: 0, right: 0,
                                     height: _hourH,
                                     child: GestureDetector(
                                       behavior: HitTestBehavior.translucent,
@@ -736,37 +849,37 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
                                 if (today) _buildNowLine(),
 
-                                // ── APPUNTAMENTI NORMALI ────────────────
+                                // ─ APPUNTAMENTI NORMALI ─
                                 ...dayApts.map((apt) {
-                                  final key = apt.id ?? apt.titolo;
+                                  final key  = apt.id ?? apt.titolo;
                                   final slot = layout[key];
-                                  if (slot == null) return const SizedBox.shrink();
+                                  if (slot == null)
+                                    return const SizedBox.shrink();
 
-                                  final topPx = _topOf(apt.oraInizio)
+                                  final topPx    = _topOf(apt.oraInizio)
                                       .clamp(0.0, totalH - 1.0);
                                   final bottomPx = _topOf(apt.oraFine)
                                       .clamp(topPx + 22.0, totalH);
-                                  final cardH   = bottomPx - topPx;
-                                  final colors  = _aptColors(apt);
-                                  final uColor  = colors.first;
-                                  final rColor  = _rColor(apt.roomId);
-                                  final room    = _rooms[apt.roomId];
-                                  final canSee  = apt.userId == me?.uid ||
+                                  final cardH    = bottomPx - topPx;
+                                  final colors   = _aptColors(apt);
+                                  final uColor   = colors.first;
+                                  final rColor   = _rColor(apt.roomId);
+                                  final room     = _rooms[apt.roomId];
+                                  final canSee   = apt.userId == me?.uid ||
                                       apt.workerIds.contains(me?.uid) ||
                                       (me?.isAdmin ?? false);
                                   final clienteNome =
                                       canSee ? _cName(apt.clientId) : '';
 
-                                  final gap     = 2.0;
-                                  final colW    = (dw - gap * (slot.colCount + 1)) /
+                                  const gap = 2.0;
+                                  final colW = (dw - gap * (slot.colCount + 1)) /
                                       slot.colCount;
-                                  final leftPos =
-                                      gap + slot.colIndex * (colW + gap);
+                                  final left = gap + slot.colIndex * (colW + gap);
 
                                   return Positioned(
                                     top:    topPx,
                                     bottom: totalH - bottomPx,
-                                    left:   leftPos,
+                                    left:   left,
                                     width:  colW,
                                     child: GestureDetector(
                                       onTap: () =>
@@ -791,12 +904,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.stretch,
                                             children: [
-                                              // Barra stanza
                                               Container(
-                                                width: 4,
-                                                color: rColor,
-                                              ),
-                                              // Background strisce + testo
+                                                  width: 4, color: rColor),
                                               Expanded(
                                                 child: CustomPaint(
                                                   painter: _StripePainter(
@@ -823,29 +932,29 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                                   );
                                 }),
 
-                                // ── BADGE OVERFLOW ──────────────────────
+                                // ─ BADGE OVERFLOW ─
                                 ...layout.entries
                                     .where((e) => e.value.isOverflow)
                                     .map((e) {
-                                  final slot = e.value;
-                                  final topPx = _topOf(
-                                          slot.clusterOraInizio)
-                                      .clamp(0.0, totalH - 1.0);
-                                  final bottomPx = _topOf(
-                                          slot.clusterOraFine)
-                                      .clamp(topPx + 22.0, totalH);
-                                  final cardH   = bottomPx - topPx;
-                                  final gap     = 2.0;
-                                  final colW    =
+                                  final slot     = e.value;
+                                  final topPx    =
+                                      _topOf(slot.clusterOraInizio)
+                                          .clamp(0.0, totalH - 1.0);
+                                  final bottomPx =
+                                      _topOf(slot.clusterOraFine)
+                                          .clamp(topPx + 22.0, totalH);
+                                  final cardH    = bottomPx - topPx;
+                                  const gap = 2.0;
+                                  final colW =
                                       (dw - gap * (slot.colCount + 1)) /
                                           slot.colCount;
-                                  final leftPos =
+                                  final left =
                                       gap + slot.colIndex * (colW + gap);
 
                                   return Positioned(
                                     top:    topPx,
                                     bottom: totalH - bottomPx,
-                                    left:   leftPos,
+                                    left:   left,
                                     width:  colW,
                                     child: _buildOverflowBadge(
                                       slot: slot,
@@ -880,11 +989,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
         Container(
           width: 8, height: 8,
           decoration: BoxDecoration(
-            color: Colors.redAccent,
-            shape: BoxShape.circle,
+            color: Colors.redAccent, shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                  color: Colors.redAccent.withOpacity(0.4), blurRadius: 4)
+                  color: Colors.redAccent.withOpacity(0.4),
+                  blurRadius: 4),
             ],
           ),
         ),
@@ -926,7 +1035,7 @@ class _SlotLayout {
   });
 }
 
-// ── STRIPE PAINTER ───────────────────────────────────────────────────────────
+// ── STRIPE PAINTER ──────────────────────────────────────────────────────────
 class _StripePainter extends CustomPainter {
   final List<Color> colors;
   final double stripeHeight;
