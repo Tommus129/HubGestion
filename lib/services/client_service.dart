@@ -7,6 +7,12 @@ const int kClientPageSize = 50;
 class ClientService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // ── COMPATIBILITA' LEGACY: alias di getClientsStream ─────────────────
+  // Mantenuto per non rompere le screen esistenti che chiamano getClients().
+  // Usa getClientsStream() nei nuovi widget.
+  Stream<List<Client>> getClients({bool includeArchived = false}) =>
+      getClientsStream(includeArchived: includeArchived);
+
   // ── Stream prima pagina (real-time, usato per la lista principale) ────────
   // Limitato a [kClientPageSize] documenti per evitare letture massicce.
   Stream<List<Client>> getClientsStream({bool includeArchived = false}) {
@@ -62,7 +68,7 @@ class ClientService {
     return snap.docs;
   }
 
-  // ── Ricerca client per cognome (prefix search) ────────────────────────────
+  // ── Ricerca clienti per cognome (prefix search) ────────────────────────────
   // Usa una query range su 'cognome' che è efficiente con l'indice esistente.
   Future<List<Client>> searchClients(String query,
       {bool includeArchived = false}) async {
@@ -104,7 +110,10 @@ class ClientService {
     await _firestore.collection('clients').doc(id).update(data);
   }
 
-  Future<void> archiveClient(String id, {required bool archived}) async {
+  // ── archiveClient: supporta sia la firma legacy (2 argomenti positional)
+  //    sia la nuova firma con named parameter {required bool archived}.
+  //    Le screen esistenti chiamano: archiveClient(id, bool)
+  Future<void> archiveClient(String id, bool archived) async {
     await _firestore
         .collection('clients')
         .doc(id)
