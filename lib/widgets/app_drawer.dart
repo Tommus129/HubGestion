@@ -15,7 +15,9 @@ class AppDrawer extends StatelessWidget {
     final auth = Provider.of<AuthService>(context);
     final user = auth.currentUser;
     final primary = Theme.of(context).colorScheme.primary;
-    final isAdmin = user?.isAdmin ?? false;
+
+    final isSuperAdmin = user?.isSuperAdmin ?? false;
+    final canManageRoles = user?.isAdmin ?? false; // superadmin + presidente
 
     // Colore avatar dal profilo utente
     Color avatarColor = primary;
@@ -67,7 +69,6 @@ class AppDrawer extends StatelessWidget {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => CalendarScreen()));
             },
           ),
-
           ListTile(
             leading: Icon(Icons.people, color: primary),
             title: Text('Clienti'),
@@ -85,7 +86,6 @@ class AppDrawer extends StatelessWidget {
                 fontSize: 11, color: Colors.grey[500],
                 fontWeight: FontWeight.w600, letterSpacing: 0.8)),
           ),
-
           ListTile(
             leading: Icon(Icons.euro, color: Colors.green[600]),
             title: Text('Pagamenti'),
@@ -94,7 +94,6 @@ class AppDrawer extends StatelessWidget {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PaymentsReportScreen()));
             },
           ),
-
           ListTile(
             leading: Icon(Icons.bar_chart, color: Colors.blue[600]),
             title: Text('Report Cliente'),
@@ -104,8 +103,8 @@ class AppDrawer extends StatelessWidget {
             },
           ),
 
-          // ── ADMIN (solo se isAdmin) ───────────────────────────────────
-          if (isAdmin) ...[
+          // ── AMMINISTRAZIONE (superadmin + presidente) ────────────────────
+          if (canManageRoles) ...[
             Divider(),
             Padding(
               padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -121,6 +120,10 @@ class AppDrawer extends StatelessWidget {
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => UsersRolesScreen()));
               },
             ),
+          ],
+
+          // ── LOG DEBUG (solo superadmin) ───────────────────────────────
+          if (isSuperAdmin)
             ListTile(
               leading: Icon(Icons.bug_report, color: Colors.red[400]),
               title: Text('Log Debug'),
@@ -129,11 +132,9 @@ class AppDrawer extends StatelessWidget {
                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LogsScreen()));
               },
             ),
-          ],
 
-          // ── PROFILO / LOGOUT ─────────────────────────────────────────
+          // ── PROFILO / LOGOUT (tutti) ──────────────────────────────────
           Divider(),
-
           ListTile(
             leading: Icon(Icons.person_outline, color: primary),
             title: Text('Profilo'),
@@ -142,7 +143,6 @@ class AppDrawer extends StatelessWidget {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProfileScreen()));
             },
           ),
-
           ListTile(
             leading: Icon(Icons.logout, color: Colors.red[400]),
             title: Text('Logout', style: TextStyle(color: Colors.red[400])),
