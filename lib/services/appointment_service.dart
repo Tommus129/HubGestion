@@ -17,7 +17,7 @@ class AppointmentService {
             snap.docs.map((d) => Appointment.fromFirestore(d)).toList());
   }
 
-  // ── Fetch one-shot per report (no real-time listener) ─────────────────
+  // ── Fetch one-shot per report ───────────────────────────────────────
   Future<List<Appointment>> getAppointmentsOnce(
       DateTime start, DateTime end) async {
     final snap = await _firestore
@@ -30,7 +30,7 @@ class AppointmentService {
     return snap.docs.map((d) => Appointment.fromFirestore(d)).toList();
   }
 
-  // ── Appuntamenti per singolo utente (scheda operatore) ────────────────
+  // ── Appuntamenti per singolo utente ────────────────────────────────
   Stream<List<Appointment>> getAppointmentsByUser(
       String userId, DateTime start, DateTime end) {
     return _firestore
@@ -45,7 +45,7 @@ class AppointmentService {
             snap.docs.map((d) => Appointment.fromFirestore(d)).toList());
   }
 
-  // ── Crea appuntamento ─────────────────────────────────────────────────
+  // ── CRUD ──────────────────────────────────────────────────────────────────
   Future<String> createAppointment(Appointment appointment) async {
     final doc = await _firestore
         .collection('appointments')
@@ -53,12 +53,10 @@ class AppointmentService {
     return doc.id;
   }
 
-  // ── Aggiorna appuntamento ────────────────────────────────────────────
   Future<void> updateAppointment(String id, Map<String, dynamic> data) async {
     await _firestore.collection('appointments').doc(id).update(data);
   }
 
-  // ── Soft-delete ────────────────────────────────────────────────────────
   Future<void> deleteAppointment(String id) async {
     await _firestore.collection('appointments').doc(id).update({
       'deleted': true,
@@ -66,7 +64,21 @@ class AppointmentService {
     });
   }
 
-  // ── Check conflitti STANZA ────────────────────────────────────────────
+  // ── Helper overlap ──────────────────────────────────────────────────
+  bool _overlaps(Appointment apt, String oraInizio, String oraFine) {
+    return _toMinutes(apt.oraInizio) < _toMinutes(oraFine) &&
+        _toMinutes(apt.oraFine) > _toMinutes(oraInizio);
+  }
+
+  ({Timestamp dayStart, Timestamp dayEnd}) _dayRange(DateTime data) {
+    return (
+      dayStart: Timestamp.fromDate(DateTime(data.year, data.month, data.day)),
+      dayEnd: Timestamp.fromDate(
+          DateTime(data.year, data.month, data.day, 23, 59, 59)),
+    );
+  }
+
+  // ── Check conflitto STANZA ────────────────────────────────────────────
   Future<Appointment?> checkRoomConflict(
     String roomId,
     DateTime data,
@@ -74,31 +86,23 @@ class AppointmentService {
     String oraFine, {
     String? excludeId,
   }) async {
-    final dayStart =
-        Timestamp.fromDate(DateTime(data.year, data.month, data.day));
-    final dayEnd = Timestamp.fromDate(
-        DateTime(data.year, data.month, data.day, 23, 59, 59));
-
+    final r = _dayRange(data);
     final snap = await _firestore
         .collection('appointments')
         .where('deleted', isEqualTo: false)
         .where('roomId', isEqualTo: roomId)
-        .where('data', isGreaterThanOrEqualTo: dayStart)
-        .where('data', isLessThanOrEqualTo: dayEnd)
+        .where('data', isGreaterThanOrEqualTo: r.dayStart)
+        .where('data', isLessThanOrEqualTo: r.dayEnd)
         .get();
-
     for (final doc in snap.docs) {
       if (excludeId != null && doc.id == excludeId) continue;
       final apt = Appointment.fromFirestore(doc);
-      if (_toMinutes(apt.oraInizio) < _toMinutes(oraFine) &&
-          _toMinutes(apt.oraFine) > _toMinutes(oraInizio)) {
-        return apt;
-      }
+      if (_overlaps(apt, oraInizio, oraFine)) return apt;
     }
     return null;
   }
 
-  // ── Check conflitti CLIENTE ───────────────────────────────────────────
+  // ── Check conflitto CLIENTE ───────────────────────────────────────────
   Future<Appointment?> checkClientConflict(
     String clientId,
     DateTime data,
@@ -106,31 +110,65 @@ class AppointmentService {
     String oraFine, {
     String? excludeId,
   }) async {
-    final dayStart =
-        Timestamp.fromDate(DateTime(data.year, data.month, data.day));
-    final dayEnd = Timestamp.fromDate(
-        DateTime(data.year, data.month, data.day, 23, 59, 59));
-
+    final r = _dayRange(data);
     final snap = await _firestore
         .collection('appointments')
         .where('deleted', isEqualTo: false)
         .where('clientId', isEqualTo: clientId)
-        .where('data', isGreaterThanOrEqualTo: dayStart)
-        .where('data', isLessThanOrEqualTo: dayEnd)
+        .where('data', isGreaterThanOrEqualTo: r.dayStart)
+        .where('data', isLessThanOrEqualTo: r.dayEnd)
         .get();
-
     for (final doc in snap.docs) {
       if (excludeId != null && doc.id == excludeId) continue;
       final apt = Appointment.fromFirestore(doc);
-      if (_toMinutes(apt.oraInizio) < _toMinutes(oraFine) &&
-          _toMinutes(apt.oraFine) > _toMinutes(oraInizio)) {
-        return apt;
-      }
+      if (_overlaps(apt, oraInizio, oraFine)) return apt;
     }
     return null;
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────
+  // ── Check conflitto LAVORATORE (userId o workerIds) ──────────────────
+  // Controlla sia il campo userId (responsabile) che workerIds (array).
+  // Restituisce il primo appuntamento in conflitto trovato per quel worker.
+  Future<Appointment?> checkWorkerConflict(
+    String workerId,
+    DateTime data,
+    String oraInizio,
+    String oraFine, {
+    String? excludeId,
+  }) async {
+    final r = _dayRange(data);
+
+    // Query 1: conflitto come userId (responsabile)
+    final snapUserId = await _firestore
+        .collection('appointments')
+        .where('deleted', isEqualTo: false)
+        .where('userId', isEqualTo: workerId)
+        .where('data', isGreaterThanOrEqualTo: r.dayStart)
+        .where('data', isLessThanOrEqualTo: r.dayEnd)
+        .get();
+    for (final doc in snapUserId.docs) {
+      if (excludeId != null && doc.id == excludeId) continue;
+      final apt = Appointment.fromFirestore(doc);
+      if (_overlaps(apt, oraInizio, oraFine)) return apt;
+    }
+
+    // Query 2: conflitto come worker aggiuntivo (workerIds array-contains)
+    final snapWorker = await _firestore
+        .collection('appointments')
+        .where('deleted', isEqualTo: false)
+        .where('workerIds', arrayContains: workerId)
+        .where('data', isGreaterThanOrEqualTo: r.dayStart)
+        .where('data', isLessThanOrEqualTo: r.dayEnd)
+        .get();
+    for (final doc in snapWorker.docs) {
+      if (excludeId != null && doc.id == excludeId) continue;
+      final apt = Appointment.fromFirestore(doc);
+      if (_overlaps(apt, oraInizio, oraFine)) return apt;
+    }
+
+    return null;
+  }
+
   int _toMinutes(String time) {
     final parts = time.split(':');
     return int.parse(parts[0]) * 60 + int.parse(parts[1]);
