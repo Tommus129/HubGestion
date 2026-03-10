@@ -9,6 +9,12 @@ import '../services/auth_service.dart';
 
 const int _kMaxVisible = 3;
 
+// Ombra leggera per rendere le scritte leggibili su sfondo colorato/striato
+const _kTextShadow = [
+  Shadow(color: Color(0x55FFFFFF), offset: Offset(0, 1), blurRadius: 2),
+  Shadow(color: Color(0x33000000), offset: Offset(0, 0), blurRadius: 3),
+];
+
 class WeeklyCalendar extends StatefulWidget {
   final DateTime focusedWeek;
   final Function(Appointment) onTapAppointment;
@@ -203,7 +209,9 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     }).toList();
   }
 
-  // ── CARD CALENDARIO ────────────────────────────────────────────────
+  // ── CARD CALENDARIO ────────────────────────────────────────────────────────
+  // Struttura: [titolo grassetto] → [paziente con icona] → [orario + icone stato]
+  // Testo con shadow per staccarsi dallo sfondo striato multi-colore.
   Widget _aptContent({
     required Appointment apt,
     required double cardH,
@@ -213,71 +221,133 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     required bool canSee,
     required String clienteNome,
   }) {
-    final isShort  = cardH < 46.0;
+    final isShort  = cardH < 40.0;
     final isNarrow = colCount >= 3;
-    final timeText = isNarrow ? apt.oraInizio : '${apt.oraInizio} - ${apt.oraFine}';
-    final mainLine = (canSee && clienteNome.isNotEmpty) ? clienteNome : apt.titolo;
-    final showTitle = canSee && clienteNome.isNotEmpty &&
-        apt.titolo.isNotEmpty && apt.titolo != clienteNome;
-    final roomName = room?.name.toUpperCase() ?? '';
+    final hasPaziente = canSee && clienteNome.isNotEmpty && clienteNome != apt.titolo;
+    final hasIcons = canSee;
+    final roomName = room?.name ?? '';
 
     return OverflowBox(
       alignment: Alignment.topLeft,
       maxHeight: double.infinity,
       maxWidth:  double.infinity,
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: isNarrow ? 4 : 6,
-          vertical: 4,
+        padding: EdgeInsets.fromLTRB(
+          isNarrow ? 4 : 6, 3,
+          isNarrow ? 3 : 5, 3,
         ),
         child: isShort
+            // ── CARD CORTA: tutto su una riga ──────────────────────────
             ? Row(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(apt.oraInizio,
-                      style: const TextStyle(
-                          fontSize: 9, fontWeight: FontWeight.w700,
-                          color: Colors.black87)),
-                  const SizedBox(width: 3),
                   Flexible(
-                    child: Text(mainLine,
-                        style: TextStyle(
-                            fontSize: isNarrow ? 9 : 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      apt.titolo,
+                      style: TextStyle(
+                          fontSize: isNarrow ? 9 : 11,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                          shadows: _kTextShadow),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  if (canSee && !isNarrow) ...[
+                  if (hasPaziente) ...[
+                    const SizedBox(width: 3),
+                    Flexible(
+                      child: Text(
+                        clienteNome,
+                        style: TextStyle(
+                            fontSize: isNarrow ? 8 : 9,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                            shadows: _kTextShadow),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                  if (hasIcons && !isNarrow) ...[
                     const SizedBox(width: 3),
                     if (apt.note != null && apt.note!.trim().isNotEmpty)
                       Icon(Icons.sticky_note_2, size: 9,
-                          color: Colors.amber.shade700),
+                          color: Colors.amber.shade800),
                     Icon(
-                      apt.pagato ? Icons.check_circle : Icons.radio_button_unchecked,
+                      apt.pagato
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
                       size: 9,
-                      color: apt.pagato ? Colors.green.shade600 : Colors.black26),
+                      color: apt.pagato
+                          ? Colors.green.shade700
+                          : Colors.black38),
                   ],
                 ],
               )
+            // ── CARD ALTA: layout verticale ────────────────────────────
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 1. Titolo in grassetto
+                  Text(
+                    apt.titolo,
+                    style: TextStyle(
+                        fontSize: isNarrow ? 10 : 12,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                        height: 1.2,
+                        shadows: _kTextShadow),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // 2. Paziente sotto il titolo
+                  if (hasPaziente) ...[
+                    const SizedBox(height: 1),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person, size: isNarrow ? 8 : 9,
+                            color: Colors.black54),
+                        const SizedBox(width: 2),
+                        Flexible(
+                          child: Text(
+                            clienteNome,
+                            style: TextStyle(
+                                fontSize: isNarrow ? 9 : 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                                shadows: _kTextShadow),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  // 3. Riga orario + icone stato
+                  const SizedBox(height: 2),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(timeText,
-                          style: const TextStyle(
-                              fontSize: 9, fontWeight: FontWeight.w600,
-                              color: Colors.black54)),
-                      const SizedBox(width: 4),
-                      if (canSee) ...[
+                      Text(
+                        isNarrow
+                            ? apt.oraInizio
+                            : '${apt.oraInizio}-${apt.oraFine}',
+                        style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black54,
+                            shadows: _kTextShadow),
+                      ),
+                      if (hasIcons) ...[
+                        const SizedBox(width: 4),
                         if (apt.note != null && apt.note!.trim().isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(right: 2),
                             child: Icon(Icons.sticky_note_2, size: 9,
-                                color: Colors.amber.shade700),
+                                color: Colors.amber.shade800),
                           ),
                         Icon(
                           apt.fatturato
@@ -285,53 +355,37 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               : Icons.receipt_long_outlined,
                           size: 9,
                           color: apt.fatturato
-                              ? Colors.orange.shade700
-                              : Colors.black26),
+                              ? Colors.orange.shade800
+                              : Colors.black38),
                         const SizedBox(width: 2),
                         Icon(
-                          apt.pagato ? Icons.check_circle : Icons.radio_button_unchecked,
+                          apt.pagato
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
                           size: 9,
                           color: apt.pagato
-                              ? Colors.green.shade600
-                              : Colors.black26),
+                              ? Colors.green.shade700
+                              : Colors.black38),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(mainLine,
-                      style: TextStyle(
-                          fontSize: isNarrow ? 10 : 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  if (showTitle)
-                    Text(apt.titolo,
-                        style: TextStyle(
-                            fontSize: isNarrow ? 9 : 10,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black54),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                  if (!isNarrow && canSee && room != null) ...[
+                  // 4. Stanza (solo se c'è spazio)
+                  if (!isNarrow && canSee && room != null && cardH > 70) ...[
                     const SizedBox(height: 2),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.meeting_room, size: 9, color: rColor),
                         const SizedBox(width: 3),
-                        Text(roomName,
-                            style: TextStyle(
-                                fontSize: 9, fontWeight: FontWeight.bold,
-                                color: rColor),
-                            maxLines: 1),
-                        if (colCount == 1) ...[
-                          const SizedBox(width: 4),
-                          Text('EUR ${apt.totale.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                  fontSize: 9, fontWeight: FontWeight.w600,
-                                  color: Colors.black45)),
-                        ],
+                        Text(
+                          roomName,
+                          style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: rColor,
+                              shadows: _kTextShadow),
+                          maxLines: 1,
+                        ),
                       ],
                     ),
                   ],
@@ -341,7 +395,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  // ── BADGE OVERFLOW ──────────────────────────────────────────────────
+  // ── BADGE OVERFLOW ─────────────────────────────────────────────────────────
   Widget _buildOverflowBadge({
     required _SlotLayout slot,
     required double cardH,
@@ -405,10 +459,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  // ── BOTTOM SHEET CARD ────────────────────────────────────────────────
-  // Usa Stack: il CustomPaint (strisce lavoratori) + barra stanza sinistra
-  // sono entrambi nel layer sotto. Il contenuto (testo) sta sopra.
-  // Niente IntrinsicHeight/stretch -> nessun constraint error.
+  // ── BOTTOM SHEET CARD ──────────────────────────────────────────────────────
   Widget _sheetCard({
     required Appointment apt,
     required bool canSee,
@@ -425,7 +476,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: CustomPaint(
-          // strisce lavoratori su tutto lo sfondo
           painter: _StripePainter(
             colors: workerColors,
             stripeHeight: 10.0,
@@ -433,13 +483,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
           ),
           child: Stack(
             children: [
-              // Barra stanza a sinistra (5px)
               Positioned(
                 top: 0, bottom: 0, left: 0,
                 width: 5,
                 child: Container(color: rColor),
               ),
-              // Contenuto con padding sinistro per non sovrapporsi alla barra
               Padding(
                 padding: const EdgeInsets.fromLTRB(13, 10, 10, 10),
                 child: Row(
@@ -450,7 +498,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Titolo
                           Text(
                             apt.titolo,
                             style: const TextStyle(
@@ -460,7 +507,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          // Cliente
                           if (canSee &&
                               clienteNome.isNotEmpty &&
                               clienteNome != apt.titolo) ...[
@@ -481,7 +527,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             ]),
                           ],
                           const SizedBox(height: 5),
-                          // Orario + stanza
                           Row(children: [
                             const Icon(Icons.access_time,
                                 size: 11, color: Colors.black45),
@@ -509,7 +554,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               ),
                             ],
                           ]),
-                          // Chips stato
                           if (canSee) ...[
                             const SizedBox(height: 6),
                             Wrap(
@@ -538,7 +582,6 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               ],
                             ),
                           ],
-                          // Testo note
                           if (canSee && hasNote) ...[
                             const SizedBox(height: 6),
                             Container(
@@ -547,8 +590,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                               decoration: BoxDecoration(
                                 color: Colors.amber.shade50,
                                 borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                    color: Colors.amber.shade200),
+                                border: Border.all(color: Colors.amber.shade200),
                               ),
                               child: Text(
                                 apt.note!,
@@ -577,7 +619,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  // ── BOTTOM SHEET ────────────────────────────────────────────────
+  // ── BOTTOM SHEET ───────────────────────────────────────────────────────────
   void _showOverflowSheet(List<Appointment> apts, Color primary) {
     final me = Provider.of<AuthService>(context, listen: false).currentUser;
     showModalBottomSheet(
@@ -933,8 +975,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
             ],
           ),
         ),
-        Expanded(child: Container(height: 1.5,
-            color: Colors.redAccent.withOpacity(0.6))),
+        Expanded(child: Container(
+            height: 1.5, color: Colors.redAccent.withOpacity(0.6))),
       ]),
     );
   }
