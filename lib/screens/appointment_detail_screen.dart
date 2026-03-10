@@ -36,11 +36,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   Future<void> _loadDetails() async {
     final apt = widget.appointment;
 
-    // Cliente
-    ClientService().getClients(includeArchived: true).listen((clients) {
-      final match = clients.where((c) => c.id == apt.clientId);
-      if (match.isNotEmpty && mounted) setState(() => _client = match.first);
-    });
+    // Cliente: usa getClientById per una singola lettura cached invece di
+    // aprire uno stream sull'intera collection.
+    final client = await ClientService().getClientById(apt.clientId);
+    if (mounted && client != null) setState(() => _client = client);
 
     // Stanza
     RoomService().getRooms().listen((rooms) {
@@ -157,7 +156,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // ── HEADER ────────────────────────────────────────────
+            // ── HEADER ──────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -186,7 +185,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ── LAVORATORI ────────────────────────────────────────
+            // ── LAVORATORI ────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -264,7 +263,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
             ),
             const SizedBox(height: 12),
 
-            // ── NOTE ─────────────────────────────────────────────
+            // ── NOTE ─────────────────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -344,7 +343,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               const SizedBox(height: 12),
             ],
 
-            // ── RIEPILOGO ECONOMICO ───────────────────────────────
+            // ── RIEPILOGO ECONOMICO ─────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
