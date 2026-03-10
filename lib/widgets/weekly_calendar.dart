@@ -405,7 +405,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
     );
   }
 
-  // ── BOTTOM SHEET: card leggera (no CustomPaint, no ClipRRect annidati) ────────
+  // ── BOTTOM SHEET CARD (leggera, niente stretch/CustomPaint) ────────────────
   Widget _sheetCard({
     required Appointment apt,
     required bool canSee,
@@ -419,163 +419,162 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
 
     return GestureDetector(
       onTap: onTap,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Barra stanza a sinistra
-          Container(
-            width: 5,
-            decoration: BoxDecoration(
-              color: rColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(10),
-                bottomLeft: Radius.circular(10),
-              ),
-            ),
-          ),
-          // Corpo
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-              decoration: BoxDecoration(
-                color: uColor.withOpacity(0.08),
-                border: Border(
-                  top: BorderSide(color: uColor.withOpacity(0.20)),
-                  right: BorderSide(color: uColor.withOpacity(0.20)),
-                  bottom: BorderSide(color: uColor.withOpacity(0.20)),
-                ),
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(10),
-                  bottomRight: Radius.circular(10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: uColor.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: uColor.withOpacity(0.25)),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Barra stanza sinistra
+              Container(
+                width: 5,
+                decoration: BoxDecoration(
+                  color: rColor,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(10),
+                    bottomLeft: Radius.circular(10),
+                  ),
                 ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Titolo
-                        Text(
-                          apt.titolo,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.black87),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        // Cliente
-                        if (canSee &&
-                            clienteNome.isNotEmpty &&
-                            clienteNome != apt.titolo) ...[
-                          const SizedBox(height: 2),
-                          Row(children: [
-                            const Icon(Icons.person_outline,
-                                size: 11, color: Colors.black45),
-                            const SizedBox(width: 3),
-                            Expanded(
-                              child: Text(
-                                clienteNome,
-                                style: const TextStyle(
-                                    fontSize: 12, color: Colors.black54),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ]),
-                        ],
-                        const SizedBox(height: 5),
-                        // Orario + stanza
-                        Row(children: [
-                          const Icon(Icons.access_time,
-                              size: 11, color: Colors.black45),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${apt.oraInizio} - ${apt.oraFine}',
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.black54),
-                          ),
-                          if (room != null) ...[
-                            const SizedBox(width: 8),
-                            Icon(Icons.meeting_room, size: 11, color: rColor),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                room.name,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: rColor,
-                                    fontWeight: FontWeight.w700),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ]),
-                        // Chips stato
-                        if (canSee) ...[
-                          const SizedBox(height: 6),
-                          Row(children: [
-                            _sheetChip(
-                              icon: Icons.receipt_long,
-                              label: 'Fatturato',
-                              active: apt.fatturato,
-                              activeColor: Colors.orange.shade700,
-                            ),
-                            const SizedBox(width: 6),
-                            _sheetChip(
-                              icon: Icons.check_circle,
-                              label: 'Pagato',
-                              active: apt.pagato,
-                              activeColor: Colors.green.shade600,
-                            ),
-                            if (hasNote) ...[
-                              const SizedBox(width: 6),
-                              _sheetChip(
-                                icon: Icons.sticky_note_2,
-                                label: 'Note',
-                                active: true,
-                                activeColor: Colors.amber.shade700,
-                              ),
-                            ],
-                          ]),
-                        ],
-                        // Testo note
-                        if (canSee && hasNote) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.amber.shade200),
-                            ),
-                            child: Text(
-                              apt.note!,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.brown.shade700,
-                                  height: 1.4),
-                              maxLines: 3,
+              // Contenuto
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Titolo
+                            Text(
+                              apt.titolo,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.black87),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                      ],
-                    ),
+                            // Cliente
+                            if (canSee &&
+                                clienteNome.isNotEmpty &&
+                                clienteNome != apt.titolo) ...[
+                              const SizedBox(height: 2),
+                              Row(children: [
+                                const Icon(Icons.person_outline,
+                                    size: 11, color: Colors.black45),
+                                const SizedBox(width: 3),
+                                Expanded(
+                                  child: Text(
+                                    clienteNome,
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.black54),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ]),
+                            ],
+                            const SizedBox(height: 5),
+                            // Orario + stanza
+                            Row(children: [
+                              const Icon(Icons.access_time,
+                                  size: 11, color: Colors.black45),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${apt.oraInizio} - ${apt.oraFine}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.black54),
+                              ),
+                              if (room != null) ...[
+                                const SizedBox(width: 8),
+                                Icon(Icons.meeting_room,
+                                    size: 11, color: rColor),
+                                const SizedBox(width: 3),
+                                Flexible(
+                                  child: Text(
+                                    room.name,
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: rColor,
+                                        fontWeight: FontWeight.w700),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ]),
+                            // Chips stato
+                            if (canSee) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 6,
+                                children: [
+                                  _sheetChip(
+                                    icon: Icons.receipt_long,
+                                    label: 'Fatturato',
+                                    active: apt.fatturato,
+                                    activeColor: Colors.orange.shade700,
+                                  ),
+                                  _sheetChip(
+                                    icon: Icons.check_circle,
+                                    label: 'Pagato',
+                                    active: apt.pagato,
+                                    activeColor: Colors.green.shade600,
+                                  ),
+                                  if (hasNote)
+                                    _sheetChip(
+                                      icon: Icons.sticky_note_2,
+                                      label: 'Note',
+                                      active: true,
+                                      activeColor: Colors.amber.shade700,
+                                    ),
+                                ],
+                              ),
+                            ],
+                            // Testo note
+                            if (canSee && hasNote) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border:
+                                      Border.all(color: Colors.amber.shade200),
+                                ),
+                                child: Text(
+                                  apt.note!,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.brown.shade700,
+                                      height: 1.4),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right,
+                          color: Colors.black26, size: 18),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right,
-                      color: Colors.black26, size: 18),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -628,11 +627,11 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                   itemCount: apts.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
-                    final apt    = apts[i];
-                    final uColor = _uColor(apt.userId);
-                    final rColor = _rColor(apt.roomId);
-                    final room   = _rooms[apt.roomId];
-                    final canSee = apt.userId == me?.uid ||
+                    final apt      = apts[i];
+                    final uColor   = _uColor(apt.userId);
+                    final rColor   = _rColor(apt.roomId);
+                    final room     = _rooms[apt.roomId];
+                    final canSee   = apt.userId == me?.uid ||
                         apt.workerIds.contains(me?.uid) ||
                         (me?.isAdmin ?? false);
                     final clienteNome = canSee ? _cName(apt.clientId) : '';
@@ -760,7 +759,7 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
                             Positioned(
                               top: i * _hourH - 8, right: 6,
                               child: Text(
-                                '${(_start + i).toString().padLeft(2, '0')}:00',
+                                '${(_start + i).toString().padLeft(2, '00')}:00',
                                 style: TextStyle(
                                     fontSize: 10,
                                     color: Colors.grey.shade400),
@@ -936,7 +935,8 @@ class _WeeklyCalendarState extends State<WeeklyCalendar> {
             ],
           ),
         ),
-        Expanded(child: Container(height: 1.5, color: Colors.redAccent.withOpacity(0.6))),
+        Expanded(child: Container(height: 1.5,
+            color: Colors.redAccent.withOpacity(0.6))),
       ]),
     );
   }
