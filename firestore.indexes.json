@@ -4,51 +4,98 @@
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted",  "order": "ASCENDING" },
-        { "fieldPath": "data",     "order": "ASCENDING" }
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "ASCENDING" },
+        { "fieldPath": "oraInizio", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "clientId", "order": "ASCENDING" },
-        { "fieldPath": "deleted",  "order": "ASCENDING" },
-        { "fieldPath": "data",     "order": "ASCENDING" }
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "DESCENDING" },
+        { "fieldPath": "oraInizio", "order": "DESCENDING" }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted",  "order": "ASCENDING" },
-        { "fieldPath": "userId",   "order": "ASCENDING" },
-        { "fieldPath": "data",     "order": "ASCENDING" }
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "clientId",  "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "ASCENDING" },
+        { "fieldPath": "oraInizio", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "deleted",  "order": "ASCENDING" },
-        { "fieldPath": "roomId",   "order": "ASCENDING" },
-        { "fieldPath": "data",     "order": "ASCENDING" },
-        { "fieldPath": "oraInizio","order": "ASCENDING" }
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "userId",    "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "ASCENDING" },
+        { "fieldPath": "oraInizio", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "userId",    "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "roomId",    "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "ASCENDING" },
+        { "fieldPath": "oraInizio", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deleted",   "order": "ASCENDING" },
+        { "fieldPath": "pagato",    "order": "ASCENDING" },
+        { "fieldPath": "data",      "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "deleted",    "order": "ASCENDING" },
+        { "fieldPath": "fatturato",  "order": "ASCENDING" },
+        { "fieldPath": "data",       "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "clients",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "archived", "order": "ASCENDING" },
-        { "fieldPath": "cognome",  "order": "ASCENDING" }
+        { "fieldPath": "archived",  "order": "ASCENDING" },
+        { "fieldPath": "cognome",   "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "logs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "timestamp","order": "DESCENDING" }
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",    "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
     }
   ],
