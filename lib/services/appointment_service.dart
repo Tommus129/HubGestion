@@ -153,9 +153,11 @@ class AppointmentService {
     }
 
     // Query 2: conflitto come worker aggiuntivo (workerIds array-contains)
+    // Nota: il filtro 'deleted' è rimosso dalla query Firestore per evitare
+    // la necessità di un indice composito su workerIds+deleted+data.
+    // Il filtraggio avviene lato client controllando apt.deleted.
     final snapWorker = await _firestore
         .collection('appointments')
-        .where('deleted', isEqualTo: false)
         .where('workerIds', arrayContains: workerId)
         .where('data', isGreaterThanOrEqualTo: r.dayStart)
         .where('data', isLessThanOrEqualTo: r.dayEnd)
@@ -163,6 +165,7 @@ class AppointmentService {
     for (final doc in snapWorker.docs) {
       if (excludeId != null && doc.id == excludeId) continue;
       final apt = Appointment.fromFirestore(doc);
+      if (apt.deleted) continue; // filtro lato client
       if (_overlaps(apt, oraInizio, oraFine)) return apt;
     }
 
