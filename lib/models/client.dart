@@ -31,6 +31,11 @@ class Client {
 
   factory Client.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    // Retrocompatibilità: alcuni doc vecchi usano 'archiviato', i nuovi 'archived'
+    final isArchived =
+        (data['archived'] as bool?) ??
+        (data['archiviato'] as bool?) ??
+        false;
     return Client(
       id: doc.id,
       nome: data['nome'] ?? '',
@@ -41,7 +46,7 @@ class Client {
       genitori: data['genitori'],
       codiceFiscale: data['codiceFiscale'],
       indirizzo: data['indirizzo'],
-      archived: data['archived'] ?? false,
+      archived: isArchived,
       isSocio: data['isSocio'] ?? true,
     );
   }
