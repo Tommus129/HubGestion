@@ -244,6 +244,12 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     if (_selectedClient == null) { _err('Seleziona un cliente'); return; }
     setState(() => _loading = true);
 
+    // Cattura navigator e messenger PRIMA delle operazioni asincrone
+    // per evitare l'errore "Trying to render a disposed EngineFlutterView"
+    // su Flutter Web quando il widget viene smontato dopo un await.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
       final inicio = _timeStr(_oraInizio);
@@ -352,10 +358,14 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           workerIds: workers,
         ));
       }
-      if (mounted) Navigator.pop(context);
+      // Usa il navigator catturato prima degli await per evitare
+      // il crash su Flutter Web con widget già disposed.
+      navigator.pop();
     } catch (e) {
-      _err('Errore: $e');
-      setState(() => _loading = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Errore: $e'), backgroundColor: Colors.red),
+      );
+      if (mounted) setState(() => _loading = false);
     }
   }
 
