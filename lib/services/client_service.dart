@@ -4,10 +4,18 @@ import '../models/client.dart';
 class ClientService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // Stream real-time con supporto archiviati (usato in ClientsListScreen)
-  Stream<List<Client>> getClients({bool includeArchived = false}) {
+  // Stream real-time — 3 modalità:
+  //   getClients()                     → solo attivi
+  //   getClients(includeArchived:true) → tutti
+  //   getClients(onlyArchived:true)    → solo archiviati
+  Stream<List<Client>> getClients({
+    bool includeArchived = false,
+    bool onlyArchived = false,
+  }) {
     Query query = _db.collection('clients').orderBy('cognome');
-    if (!includeArchived) {
+    if (onlyArchived) {
+      query = query.where('archived', isEqualTo: true);
+    } else if (!includeArchived) {
       query = query.where('archived', isEqualTo: false);
     }
     return query
@@ -15,10 +23,15 @@ class ClientService {
         .map((s) => s.docs.map((d) => Client.fromFirestore(d)).toList());
   }
 
-  // One-shot per form (non serve real-time)
-  Future<List<Client>> getClientsOnce({bool includeArchived = false}) async {
+  // One-shot per form
+  Future<List<Client>> getClientsOnce({
+    bool includeArchived = false,
+    bool onlyArchived = false,
+  }) async {
     Query query = _db.collection('clients').orderBy('cognome');
-    if (!includeArchived) {
+    if (onlyArchived) {
+      query = query.where('archived', isEqualTo: true);
+    } else if (!includeArchived) {
       query = query.where('archived', isEqualTo: false);
     }
     final snap = await query.get();
