@@ -244,79 +244,79 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     if (_selectedClient == null) { _err('Seleziona un cliente'); return; }
     setState(() => _loading = true);
 
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final inicio = _timeStr(_oraInizio);
-    final fine = _timeStr(_oraFine);
-    final dataNorm = DateTime(
-        _selectedDay.year, _selectedDay.month, _selectedDay.day);
-    final excludeId = widget.appointment?.id;
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final inicio = _timeStr(_oraInizio);
+      final fine = _timeStr(_oraFine);
+      final dataNorm = DateTime(
+          _selectedDay.year, _selectedDay.month, _selectedDay.day);
+      final excludeId = widget.appointment?.id;
 
-    // 1️⃣ Conflitto STANZA
-    final roomConflict = await _aptService.checkRoomConflict(
-        _selectedRoom!.id!, dataNorm, inicio, fine,
-        excludeId: excludeId);
-    if (roomConflict != null && mounted) {
-      final go = await _showConflictDialog(
-        titolo: 'Stanza occupata',
-        messaggio:
-            '"​${_selectedRoom!.name}" è già occupata in questo orario:\n'
-            '"​${roomConflict.titolo}"\n'
-            '${roomConflict.oraInizio} – ${roomConflict.oraFine}\n\n'
-            'Vuoi creare l\'appuntamento lo stesso?',
-        colore: Colors.orange,
-      );
-      if (!go) { setState(() => _loading = false); return; }
-    }
-
-    // 2️⃣ Conflitto CLIENTE
-    final clientConflict = await _aptService.checkClientConflict(
-        _selectedClient!.id!, dataNorm, inicio, fine,
-        excludeId: excludeId);
-    if (clientConflict != null && mounted) {
-      final go = await _showConflictDialog(
-        titolo: 'Cliente già impegnato',
-        messaggio:
-            '"​${_selectedClient!.fullName}" ha già un appuntamento in questo orario:\n'
-            '"​${clientConflict.titolo}"\n'
-            '${clientConflict.oraInizio} – ${clientConflict.oraFine}\n\n'
-            'Vuoi continuare comunque?',
-        colore: Colors.red,
-      );
-      if (!go) { setState(() => _loading = false); return; }
-    }
-
-    // 3️⃣ Conflitto LAVORATORI (uno per uno)
-    final workers = _selectedWorkerIds.isNotEmpty
-        ? _selectedWorkerIds
-        : [auth.firebaseUser!.uid];
-
-    for (final workerId in workers) {
-      final workerConflict = await _aptService.checkWorkerConflict(
-          workerId, dataNorm, inicio, fine,
+      // 1⃣ Conflitto STANZA
+      final roomConflict = await _aptService.checkRoomConflict(
+          _selectedRoom!.id!, dataNorm, inicio, fine,
           excludeId: excludeId);
-      if (workerConflict != null && mounted) {
-        final workerName = _allUsers
-            .firstWhere((u) => u.uid == workerId,
-                orElse: () => UfficioUser(
-                    uid: workerId,
-                    email: workerId,
-                    displayName: 'Lavoratore'))
-            .displayName ?? 'Lavoratore';
+      if (roomConflict != null && mounted) {
         final go = await _showConflictDialog(
-          titolo: 'Lavoratore già occupato',
+          titolo: 'Stanza occupata',
           messaggio:
-              '"​$workerName" ha già un appuntamento in questo orario:\n'
-              '"​${workerConflict.titolo}"\n'
-              '${workerConflict.oraInizio} – ${workerConflict.oraFine}\n\n'
-              'Vuoi assegnarlo comunque?',
-          colore: Colors.purple,
+              '"\u200b${_selectedRoom!.name}" è già occupata in questo orario:\n'
+              '"\u200b${roomConflict.titolo}"\n'
+              '${roomConflict.oraInizio} – ${roomConflict.oraFine}\n\n'
+              'Vuoi creare l\'appuntamento lo stesso?',
+          colore: Colors.orange,
         );
         if (!go) { setState(() => _loading = false); return; }
       }
-    }
 
-    // ── Tutti i check superati (o confermati) — salva ───────────────────────
-    try {
+      // 2⃣ Conflitto CLIENTE
+      final clientConflict = await _aptService.checkClientConflict(
+          _selectedClient!.id!, dataNorm, inicio, fine,
+          excludeId: excludeId);
+      if (clientConflict != null && mounted) {
+        final go = await _showConflictDialog(
+          titolo: 'Cliente già impegnato',
+          messaggio:
+              '"\u200b${_selectedClient!.fullName}" ha già un appuntamento in questo orario:\n'
+              '"\u200b${clientConflict.titolo}"\n'
+              '${clientConflict.oraInizio} – ${clientConflict.oraFine}\n\n'
+              'Vuoi continuare comunque?',
+          colore: Colors.red,
+        );
+        if (!go) { setState(() => _loading = false); return; }
+      }
+
+      // 3⃣ Conflitto LAVORATORI (uno per uno)
+      final workers = _selectedWorkerIds.isNotEmpty
+          ? _selectedWorkerIds
+          : [auth.firebaseUser!.uid];
+
+      for (final workerId in workers) {
+        final workerConflict = await _aptService.checkWorkerConflict(
+            workerId, dataNorm, inicio, fine,
+            excludeId: excludeId);
+        if (workerConflict != null && mounted) {
+          final workerName = _allUsers
+              .firstWhere((u) => u.uid == workerId,
+                  orElse: () => UfficioUser(
+                      uid: workerId,
+                      email: workerId,
+                      displayName: 'Lavoratore'))
+              .displayName ?? 'Lavoratore';
+          final go = await _showConflictDialog(
+            titolo: 'Lavoratore già occupato',
+            messaggio:
+                '"\u200b$workerName" ha già un appuntamento in questo orario:\n'
+                '"\u200b${workerConflict.titolo}"\n'
+                '${workerConflict.oraInizio} – ${workerConflict.oraFine}\n\n'
+                'Vuoi assegnarlo comunque?',
+            colore: Colors.purple,
+          );
+          if (!go) { setState(() => _loading = false); return; }
+        }
+      }
+
+      // ── Tutti i check superati (o confermati) — salva ───────────────────────
       if (isEditing) {
         await _aptService.updateAppointment(widget.appointment!.id!, {
           'titolo': _titoloController.text,
