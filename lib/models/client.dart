@@ -11,6 +11,7 @@ class Client {
   final String? codiceFiscale;
   final String? indirizzo;
   final bool archived;
+  final bool isSocio;
 
   Client({
     this.id,
@@ -23,6 +24,7 @@ class Client {
     this.codiceFiscale,
     this.indirizzo,
     this.archived = false,
+    this.isSocio = true,
   });
 
   String get fullName => '$nome $cognome';
@@ -40,6 +42,7 @@ class Client {
       codiceFiscale: data['codiceFiscale'],
       indirizzo: data['indirizzo'],
       archived: data['archived'] ?? false,
+      isSocio: data['isSocio'] ?? true,
     );
   }
 
@@ -54,6 +57,7 @@ class Client {
       'codiceFiscale': codiceFiscale ?? '',
       'indirizzo': indirizzo ?? '',
       'archived': archived,
+      'isSocio': isSocio,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }

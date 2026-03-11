@@ -106,8 +106,27 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                                     Row(children: [
                                       Text(client.fullName,
                                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                      SizedBox(width: 6),
+                                      // Badge Socio / Non Socio
+                                      Container(
+                                        padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: client.isSocio
+                                              ? Colors.green.withOpacity(0.12)
+                                              : Colors.orange.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          client.isSocio ? 'Socio' : 'Non Socio',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: client.isSocio ? Colors.green[700] : Colors.orange[800],
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
                                       if (client.archived) ...[
-                                        SizedBox(width: 8),
+                                        SizedBox(width: 6),
                                         Container(
                                           padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
@@ -215,13 +234,40 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(client.fullName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      if (client.archived)
+                      SizedBox(height: 4),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: client.isSocio
+                              ? Colors.green.withOpacity(0.12)
+                              : Colors.orange.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(
+                            client.isSocio ? Icons.card_membership : Icons.person_off,
+                            size: 12,
+                            color: client.isSocio ? Colors.green[700] : Colors.orange[800],
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            client.isSocio ? 'Socio' : 'Non Socio (+15%)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: client.isSocio ? Colors.green[700] : Colors.orange[800],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ]),
+                      ),
+                      if (client.archived) ...[
+                        SizedBox(height: 4),
                         Container(
-                          margin: EdgeInsets.only(top: 4),
                           padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
                           child: Text('Archiviato', style: TextStyle(fontSize: 11, color: Colors.grey)),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -236,7 +282,6 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
               ]),
               Divider(height: 28),
 
-              // CONTATTO
               _sectionTitle('Contatto'),
               SizedBox(height: 10),
               if ((client.email ?? '').isNotEmpty)
@@ -249,7 +294,6 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   child: Text('Nessun contatto inserito', style: TextStyle(color: Colors.grey, fontSize: 13)),
                 ),
 
-              // DATI ANAGRAFICI
               if ((client.codiceFiscale ?? '').isNotEmpty || (client.indirizzo ?? '').isNotEmpty) ...[
                 Divider(height: 28),
                 _sectionTitle('Dati Anagrafici'),
@@ -260,7 +304,6 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   _detailRow(icon: Icons.home_outlined, color: Colors.teal, label: 'Indirizzo', value: client.indirizzo!),
               ],
 
-              // GENITORI
               if ((client.genitori ?? '').isNotEmpty) ...[
                 Divider(height: 28),
                 _sectionTitle('Genitori / Tutore'),
@@ -268,7 +311,6 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                 _detailRow(icon: Icons.people_outlined, color: Colors.purple, label: 'Genitori / Tutore', value: client.genitori!),
               ],
 
-              // NOTE
               if ((client.note ?? '').isNotEmpty) ...[
                 Divider(height: 28),
                 _sectionTitle('Note'),
@@ -374,118 +416,149 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
     final genitoriController = TextEditingController(text: client?.genitori ?? '');
     final cfController = TextEditingController(text: client?.codiceFiscale ?? '');
     final indirizzoController = TextEditingController(text: client?.indirizzo ?? '');
+    // isSocio è gestito con StatefulBuilder per aggiornare l'UI del dialog
+    bool isSocio = client?.isSocio ?? true;
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(client == null ? 'Nuovo Cliente' : 'Modifica Cliente'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // NOME E COGNOME
-              Row(children: [
-                Expanded(child: TextField(controller: nomeController, decoration: InputDecoration(labelText: 'Nome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
-                SizedBox(width: 8),
-                Expanded(child: TextField(controller: cognomeController, decoration: InputDecoration(labelText: 'Cognome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
-              ]),
-              SizedBox(height: 12),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(client == null ? 'Nuovo Cliente' : 'Modifica Cliente'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(child: TextField(controller: nomeController, decoration: InputDecoration(labelText: 'Nome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
+                  SizedBox(width: 8),
+                  Expanded(child: TextField(controller: cognomeController, decoration: InputDecoration(labelText: 'Cognome *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
+                ]),
+                SizedBox(height: 12),
 
-              // CONTATTO
-              TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-              SizedBox(height: 12),
-              TextField(controller: telefonoController, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Telefono', prefixIcon: Icon(Icons.phone_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-              SizedBox(height: 16),
-
-              // SEPARATORE DATI ANAGRAFICI
-              Row(children: [
-                Expanded(child: Divider()),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('Dati Anagrafici (facoltativi)', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                // TOGGLE SOCIO
+                Container(
+                  decoration: BoxDecoration(
+                    color: isSocio
+                        ? Colors.green.withOpacity(0.05)
+                        : Colors.orange.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSocio
+                          ? Colors.green.withOpacity(0.35)
+                          : Colors.orange.withOpacity(0.45),
+                    ),
+                  ),
+                  child: SwitchListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                    title: Text(
+                      isSocio ? 'Socio' : 'Non Socio (+15%)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: isSocio ? Colors.green[700] : Colors.orange[800],
+                      ),
+                    ),
+                    secondary: Icon(
+                      isSocio ? Icons.card_membership : Icons.person_off,
+                      color: isSocio ? Colors.green[700] : Colors.orange[800],
+                      size: 20,
+                    ),
+                    value: isSocio,
+                    activeColor: Colors.green,
+                    onChanged: (v) => setDialogState(() => isSocio = v),
+                  ),
                 ),
-                Expanded(child: Divider()),
-              ]),
-              SizedBox(height: 12),
+                SizedBox(height: 12),
 
-              // CODICE FISCALE
-              TextField(
-                controller: cfController,
-                textCapitalization: TextCapitalization.characters,
-                decoration: InputDecoration(
-                  labelText: 'Codice Fiscale',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                SizedBox(height: 12),
+                TextField(controller: telefonoController, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Telefono', prefixIcon: Icon(Icons.phone_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                SizedBox(height: 16),
+
+                Row(children: [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('Dati Anagrafici (facoltativi)', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  ),
+                  Expanded(child: Divider()),
+                ]),
+                SizedBox(height: 12),
+
+                TextField(
+                  controller: cfController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    labelText: 'Codice Fiscale',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
-              SizedBox(height: 12),
-
-              // INDIRIZZO
-              TextField(
-                controller: indirizzoController,
-                decoration: InputDecoration(
-                  labelText: 'Indirizzo',
-                  prefixIcon: Icon(Icons.home_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                SizedBox(height: 12),
+                TextField(
+                  controller: indirizzoController,
+                  decoration: InputDecoration(
+                    labelText: 'Indirizzo',
+                    prefixIcon: Icon(Icons.home_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
-              SizedBox(height: 12),
-
-              // GENITORI
-              TextField(
-                controller: genitoriController,
-                decoration: InputDecoration(
-                  labelText: 'Genitori / Tutore',
-                  prefixIcon: Icon(Icons.people_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                SizedBox(height: 12),
+                TextField(
+                  controller: genitoriController,
+                  decoration: InputDecoration(
+                    labelText: 'Genitori / Tutore',
+                    prefixIcon: Icon(Icons.people_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                 ),
-              ),
-              SizedBox(height: 16),
+                SizedBox(height: 16),
 
-              // SEPARATORE NOTE
-              Row(children: [
-                Expanded(child: Divider()),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('Note', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-                ),
-                Expanded(child: Divider()),
-              ]),
-              SizedBox(height: 12),
+                Row(children: [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('Note', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  ),
+                  Expanded(child: Divider()),
+                ]),
+                SizedBox(height: 12),
 
-              // NOTE
-              TextField(controller: noteController, maxLines: 3, decoration: InputDecoration(labelText: 'Note', prefixIcon: Icon(Icons.note_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-            ],
+                TextField(controller: noteController, maxLines: 3, decoration: InputDecoration(labelText: 'Note', prefixIcon: Icon(Icons.note_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
+            ElevatedButton(
+              onPressed: () async {
+                if (nomeController.text.isEmpty || cognomeController.text.isEmpty) return;
+                final newClient = Client(
+                  id: client?.id,
+                  nome: nomeController.text.trim(),
+                  cognome: cognomeController.text.trim(),
+                  email: emailController.text.trim(),
+                  telefono: telefonoController.text.trim(),
+                  note: noteController.text.trim(),
+                  genitori: genitoriController.text.trim(),
+                  codiceFiscale: cfController.text.trim().toUpperCase(),
+                  indirizzo: indirizzoController.text.trim(),
+                  isSocio: isSocio,
+                );
+                if (client == null) {
+                  await ClientService().createClient(newClient);
+                } else {
+                  await ClientService().updateClient(client.id!, newClient.toFirestore());
+                }
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white),
+              child: Text(client == null ? 'Crea' : 'Salva'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nomeController.text.isEmpty || cognomeController.text.isEmpty) return;
-              final newClient = Client(
-                id: client?.id,
-                nome: nomeController.text.trim(),
-                cognome: cognomeController.text.trim(),
-                email: emailController.text.trim(),
-                telefono: telefonoController.text.trim(),
-                note: noteController.text.trim(),
-                genitori: genitoriController.text.trim(),
-                codiceFiscale: cfController.text.trim().toUpperCase(),
-                indirizzo: indirizzoController.text.trim(),
-              );
-              if (client == null) {
-                await ClientService().createClient(newClient);
-              } else {
-                await ClientService().updateClient(client.id!, newClient.toFirestore());
-              }
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white),
-            child: Text(client == null ? 'Crea' : 'Salva'),
-          ),
-        ],
       ),
     );
   }
