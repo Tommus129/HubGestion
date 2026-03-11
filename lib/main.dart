@@ -6,15 +6,10 @@ import 'services/auth_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'utils/app_theme.dart';
-// import 'utils/seed_data.dart'; // ← decommentare per il seed, poi ricommentare
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // ⬇️ SEED: decommentare UNA VOLTA SOLA per popolare Firestore, poi ricommentare
-  // await seedFirestore();
-
   runApp(
     ChangeNotifierProvider(
       create: (_) => AuthService(),
@@ -28,6 +23,7 @@ class UfficioApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthService>(
       builder: (context, auth, _) {
+        // Colore tema dinamico dal profilo utente
         Color primaryColor = Colors.teal;
         if (auth.currentUser?.personaColor != null) {
           final hex = auth.currentUser!.personaColor!.replaceAll('#', '');
