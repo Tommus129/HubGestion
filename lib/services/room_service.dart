@@ -2,25 +2,32 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/room.dart';
 
 class RoomService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // Stream real-time (usato nel calendario)
   Stream<List<Room>> getRooms() {
-    return _firestore
+    return _db
         .collection('rooms')
-        .where('archived', isEqualTo: false)
+        .orderBy('name')
         .snapshots()
-        .map((snap) => snap.docs.map((d) => Room.fromFirestore(d)).toList());
+        .map((s) => s.docs.map((d) => Room.fromFirestore(d)).toList());
   }
 
-  Future<void> createRoom(Room room) async {
-    await _firestore.collection('rooms').add(room.toFirestore());
+  // One-shot per form (non serve real-time)
+  Future<List<Room>> getRoomsOnce() async {
+    final snap = await _db.collection('rooms').orderBy('name').get();
+    return snap.docs.map((d) => Room.fromFirestore(d)).toList();
+  }
+
+  Future<void> addRoom(Room room) async {
+    await _db.collection('rooms').add(room.toFirestore());
   }
 
   Future<void> updateRoom(String id, Map<String, dynamic> data) async {
-    await _firestore.collection('rooms').doc(id).update(data);
+    await _db.collection('rooms').doc(id).update(data);
   }
 
   Future<void> deleteRoom(String id) async {
-    await _firestore.collection('rooms').doc(id).update({'archived': true});
+    await _db.collection('rooms').doc(id).delete();
   }
 }
