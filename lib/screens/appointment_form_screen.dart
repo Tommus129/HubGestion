@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -48,6 +49,11 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
 
   List<Room> _rooms = [];
   List<Client> _clients = [];
+
+  // Stream subscriptions da cancellare nel dispose()
+  StreamSubscription? _roomsSub;
+  StreamSubscription? _clientsSub;
+
   bool get isEditing => widget.appointment != null;
 
   @override
@@ -64,6 +70,16 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     }
     _loadData();
     if (isEditing) _prefillForm();
+  }
+
+  @override
+  void dispose() {
+    _roomsSub?.cancel();
+    _clientsSub?.cancel();
+    _titoloController.dispose();
+    _noteController.dispose();
+    _tariffaController.dispose();
+    super.dispose();
   }
 
   void _prefillForm() {
@@ -84,21 +100,30 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
   }
 
   void _loadData() {
-    _roomService.getRooms().listen((rooms) => setState(() {
-          _rooms = rooms;
-          if (isEditing && _selectedRoom == null) {
-            final m = rooms.where((r) => r.id == widget.appointment!.roomId);
-            if (m.isNotEmpty) _selectedRoom = m.first;
-          }
-        }));
-    _clientService.getClients().listen((clients) => setState(() {
-          _clients = clients;
-          if (isEditing && _selectedClient == null) {
-            final m = clients.where((c) => c.id == widget.appointment!.clientId);
-            if (m.isNotEmpty) _selectedClient = m.first;
-          }
-        }));
+    _roomsSub = _roomService.getRooms().listen((rooms) {
+      if (!mounted) return;
+      setState(() {
+        _rooms = rooms;
+        if (isEditing && _selectedRoom == null) {
+          final m = rooms.where((r) => r.id == widget.appointment!.roomId);
+          if (m.isNotEmpty) _selectedRoom = m.first;
+        }
+      });
+    });
+
+    _clientsSub = _clientService.getClients().listen((clients) {
+      if (!mounted) return;
+      setState(() {
+        _clients = clients;
+        if (isEditing && _selectedClient == null) {
+          final m = clients.where((c) => c.id == widget.appointment!.clientId);
+          if (m.isNotEmpty) _selectedClient = m.first;
+        }
+      });
+    });
+
     FirebaseFirestore.instance.collection('users').get().then((snap) {
+      if (!mounted) return;
       setState(() {
         _allUsers = snap.docs
             .map((d) => UfficioUser.fromFirestore(d.data(), d.id))
@@ -114,7 +139,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
-    if (picked != null) setState(() => _selectedDay = picked);
+    if (picked != null && mounted) setState(() => _selectedDay = picked);
   }
 
   void _onInizioChanged(TimeOfDay t) {
@@ -245,8 +270,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
     setState(() => _loading = true);
 
     // Cattura navigator e messenger PRIMA delle operazioni asincrone
-    // per evitare l'errore "Trying to render a disposed EngineFlutterView"
-    // su Flutter Web quando il widget viene smontato dopo un await.
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
@@ -358,8 +381,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           workerIds: workers,
         ));
       }
-      // Usa il navigator catturato prima degli await per evitare
-      // il crash su Flutter Web con widget già disposed.
       navigator.pop();
     } catch (e) {
       messenger.showSnackBar(
@@ -491,7 +512,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // TITOLO
               TextFormField(
                 controller: _titoloController,
                 decoration: InputDecoration(
@@ -504,8 +524,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     v!.isEmpty ? 'Campo obbligatorio' : null,
               ),
               SizedBox(height: 16),
-
-              // NOTE
               TextFormField(
                 controller: _noteController,
                 maxLines: 3,
@@ -520,8 +538,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ),
               ),
               SizedBox(height: 16),
-
-              // DATA
               InkWell(
                 onTap: _pickDate,
                 borderRadius: BorderRadius.circular(8),
@@ -549,8 +565,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ),
               ),
               SizedBox(height: 20),
-
-              // ORARI
               Text('Orario',
                   style: TextStyle(
                       fontWeight: FontWeight.w600,
@@ -629,8 +643,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ],
               ),
               SizedBox(height: 16),
-
-              // STANZA
               DropdownButtonFormField<Room>(
                 value: _selectedRoom,
                 decoration: InputDecoration(
@@ -659,8 +671,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 hint: Text('Seleziona stanza'),
               ),
               SizedBox(height: 16),
-
-              // CLIENTE
               DropdownButtonFormField<Client>(
                 value: _selectedClient,
                 decoration: InputDecoration(
@@ -677,12 +687,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 hint: Text('Seleziona cliente'),
               ),
               SizedBox(height: 16),
-
-              // LAVORATORI
               _buildWorkerSelector(primary),
               SizedBox(height: 16),
-
-              // TOGGLE SOCIO
               Container(
                 decoration: BoxDecoration(
                   color: _isSocio
@@ -697,14 +703,10 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ),
                 child: SwitchListTile(
                   title: Text(
-                    _isSocio
-                        ? 'Cliente Socio'
-                        : 'Cliente Non Socio (+15%)',
+                    _isSocio ? 'Cliente Socio' : 'Cliente Non Socio (+15%)',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: _isSocio
-                          ? Colors.green[700]
-                          : Colors.orange[800],
+                      color: _isSocio ? Colors.green[700] : Colors.orange[800],
                     ),
                   ),
                   subtitle: Text(
@@ -714,12 +716,8 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                     style: TextStyle(fontSize: 12),
                   ),
                   secondary: Icon(
-                    _isSocio
-                        ? Icons.card_membership
-                        : Icons.person_off,
-                    color: _isSocio
-                        ? Colors.green[700]
-                        : Colors.orange[800],
+                    _isSocio ? Icons.card_membership : Icons.person_off,
+                    color: _isSocio ? Colors.green[700] : Colors.orange[800],
                   ),
                   value: _isSocio,
                   activeColor: Colors.green,
@@ -727,8 +725,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ),
               ),
               SizedBox(height: 16),
-
-              // TARIFFA
               TextFormField(
                 controller: _tariffaController,
                 keyboardType: TextInputType.number,
@@ -747,15 +743,12 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ),
               ),
               SizedBox(height: 12),
-
-              // TOTALE
               Container(
                 padding: EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: primary.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: primary.withOpacity(0.2)),
+                  border: Border.all(color: primary.withOpacity(0.2)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -771,8 +764,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                           SizedBox(height: 2),
                           Row(children: [
                             Text('Totale stimato',
-                                style: TextStyle(
-                                    color: primary, fontSize: 13)),
+                                style: TextStyle(color: primary, fontSize: 13)),
                             if (!_isSocio) ...[
                               SizedBox(width: 6),
                               Container(
@@ -780,8 +772,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: Colors.orange.withOpacity(0.15),
-                                  borderRadius:
-                                      BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text('+15%',
                                     style: TextStyle(
@@ -801,19 +792,15 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ),
               ),
               SizedBox(height: 16),
-
-              // FATTURATO / PAGATO (solo modifica)
               if (isEditing) ...[
                 Row(children: [
                   Expanded(
                     child: CheckboxListTile(
-                      title: Text('Fatturato',
-                          style: TextStyle(fontSize: 13)),
+                      title: Text('Fatturato', style: TextStyle(fontSize: 13)),
                       value: _fatturato,
                       activeColor: Colors.orange,
                       dense: true,
-                      onChanged: (v) =>
-                          setState(() => _fatturato = v!),
+                      onChanged: (v) => setState(() => _fatturato = v!),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                         side: BorderSide(color: Colors.grey[300]!),
@@ -823,13 +810,11 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                   SizedBox(width: 8),
                   Expanded(
                     child: CheckboxListTile(
-                      title: Text('Pagato',
-                          style: TextStyle(fontSize: 13)),
+                      title: Text('Pagato', style: TextStyle(fontSize: 13)),
                       value: _pagato,
                       activeColor: Colors.green,
                       dense: true,
-                      onChanged: (v) =>
-                          setState(() => _pagato = v!),
+                      onChanged: (v) => setState(() => _pagato = v!),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                         side: BorderSide(color: Colors.grey[300]!),
@@ -839,8 +824,6 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                 ]),
                 SizedBox(height: 16),
               ],
-
-              // SALVA
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -854,9 +837,7 @@ class _AppointmentFormScreenState extends State<AppointmentFormScreen> {
                               color: Colors.white, strokeWidth: 2))
                       : Icon(isEditing ? Icons.save : Icons.add),
                   label: Text(
-                      isEditing
-                          ? 'Salva Modifiche'
-                          : 'Crea Appuntamento',
+                      isEditing ? 'Salva Modifiche' : 'Crea Appuntamento',
                       style: TextStyle(fontSize: 15)),
                 ),
               ),
