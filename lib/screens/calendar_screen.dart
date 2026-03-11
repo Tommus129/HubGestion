@@ -27,12 +27,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   List<Map<String, dynamic>> _users = [];
   List<Room> _rooms = [];
   List<Client> _clients = [];
+  bool _loadingFilters = true;
 
   final _db = FirebaseFirestore.instance;
-
-  // Subscriptions da cancellare nel dispose()
-  StreamSubscription? _roomsSub;
-  StreamSubscription? _clientsSub;
 
   @override
   void initState() {
@@ -40,49 +37,46 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadFilterData();
   }
 
-  @override
-  void dispose() {
-    _roomsSub?.cancel();
-    _clientsSub?.cancel();
-    super.dispose();
-  }
-
+  // Tutto one-shot: rooms e clients cambiano raramente, non serve real-time.
+  // Questo elimina 2 stream Firestore sempre aperti e il relativo lag.
   Future<void> _loadFilterData() async {
-    // Utenti (one-shot, nessun stream)
-    final usersSnap = await _db.collection('users').get();
-    if (!mounted) return;
-    setState(() {
-      _users = usersSnap.docs.map((d) => {
-        'uid': d.id,
-        'displayName': d.data()['displayName'] ?? d.data()['email'] ?? 'Utente',
-        'personaColor': d.data()['personaColor'] ?? '#607D8B',
-      }).toList();
-    });
-
-    // Stanze
-    _roomsSub = RoomService().getRooms().listen((rooms) {
+    try {
+      final results = await Future.wait([
+        _db.collection('users').get(),
+        RoomService().getRoomsOnce(),
+        ClientService().getClientsOnce(includeArchived: false),
+      ]);
       if (!mounted) return;
-      setState(() => _rooms = rooms);
-    });
-
-    // Clienti
-    _clientsSub = ClientService().getClients().listen((clients) {
+      final usersSnap = results[0] as QuerySnapshot;
+      final rooms = results[1] as List<Room>;
+      final clients = results[2] as List<Client>;
+      setState(() {
+        _users = usersSnap.docs.map((d) => {
+          'uid': d.id,
+          'displayName': d.data()['displayName'] ?? d.data()['email'] ?? 'Utente',
+          'personaColor': d.data()['personaColor'] ?? '#607D8B',
+        }).toList();
+        _rooms = rooms;
+        _clients = clients;
+        _loadingFilters = false;
+      });
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _clients = clients);
-    });
+      setState(() => _loadingFilters = false);
+    }
   }
 
   void _previousWeek() => setState(() =>
-      _focusedWeek = _focusedWeek.subtract(Duration(days: 7)));
+      _focusedWeek = _focusedWeek.subtract(const Duration(days: 7)));
 
   void _nextWeek() => setState(() =>
-      _focusedWeek = _focusedWeek.add(Duration(days: 7)));
+      _focusedWeek = _focusedWeek.add(const Duration(days: 7)));
 
   void _goToday() => setState(() => _focusedWeek = DateTime.now());
 
   String _weekLabel() {
     final monday = _focusedWeek.subtract(Duration(days: _focusedWeek.weekday - 1));
-    final sunday = monday.add(Duration(days: 6));
+    final sunday = monday.add(const Duration(days: 6));
     if (monday.month == sunday.month) {
       return '${monday.day} - ${sunday.day} ${_monthName(monday.month)} ${monday.year}';
     }
@@ -111,18 +105,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Calendario'),
+        title: const Text('Calendario'),
         actions: [
           if (_hasActiveFilters)
             IconButton(
-              icon: Icon(Icons.filter_alt_off),
+              icon: const Icon(Icons.filter_alt_off),
               tooltip: 'Rimuovi filtri',
               onPressed: _resetFilters,
             ),
           IconButton(
-            icon: Icon(Icons.today),
+            icon: const Icon(Icons.today),
             tooltip: 'Oggi',
             onPressed: _goToday,
+          ),
+          // Ricarica filtri manualmente (utile se aggiungi clienti/stanze)
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Aggiorna filtri',
+            onPressed: () {
+              setState(() => _loadingFilters = true);
+              _loadFilterData();
+            },
           ),
         ],
       ),
@@ -131,10 +134,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
         children: [
           Container(
             color: Colors.grey[50],
-            padding: EdgeInsets.fromLTRB(12, 8, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: Row(
+              child: _loadingFilters
+                  ? const SizedBox(
+                      height: 32,
+                      child: Row(children: [
+                        SizedBox(width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: 8),
+                        Text('Caricamento filtri...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ]),
+                    )
+                  : Row(
                 children: [
                   _FilterChip(
                     icon: Icons.person,
@@ -149,7 +162,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ? () => setState(() => _filterUserId = null)
                         : null,
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   _FilterChip(
                     icon: Icons.meeting_room,
                     label: _filterRoomId != null
@@ -163,7 +176,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ? () => setState(() => _filterRoomId = null)
                         : null,
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   _FilterChip(
                     icon: Icons.business_center,
                     label: _filterClientId != null
@@ -178,11 +191,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         : null,
                   ),
                   if (_hasActiveFilters) ...[
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     GestureDetector(
                       onTap: _resetFilters,
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(20),
@@ -190,7 +203,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ),
                         child: Row(children: [
                           Icon(Icons.clear_all, size: 14, color: Colors.red),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text('Reset', style: TextStyle(fontSize: 12, color: Colors.red)),
                         ]),
                       ),
@@ -202,12 +215,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           Container(
             color: primary.withOpacity(0.05),
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: Icon(Icons.chevron_left),
+                  icon: const Icon(Icons.chevron_left),
                   onPressed: _previousWeek,
                   color: primary,
                 ),
@@ -216,7 +229,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: primary),
                 ),
                 IconButton(
-                  icon: Icon(Icons.chevron_right),
+                  icon: const Icon(Icons.chevron_right),
                   onPressed: _nextWeek,
                   color: primary,
                 ),
@@ -252,8 +265,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
             builder: (_) => AppointmentFormScreen(selectedDay: DateTime.now()),
           ),
         ),
-        icon: Icon(Icons.add),
-        label: Text('Nuovo'),
+        icon: const Icon(Icons.add),
+        label: const Text('Nuovo'),
       ),
     );
   }
@@ -261,7 +274,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void _showUserPicker(BuildContext context, Color primary) {
     if (_users.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Caricamento utenti in corso...')),
+        const SnackBar(content: Text('Nessun utente disponibile')),
       );
       return;
     }
@@ -314,7 +327,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             leading: Container(
               width: 28, height: 28,
               decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6)),
-              child: Icon(Icons.meeting_room, color: Colors.white, size: 16),
+              child: const Icon(Icons.meeting_room, color: Colors.white, size: 16),
             ),
             label: r.name,
             selected: _filterRoomId == r.id,
@@ -340,7 +353,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             radius: 14,
             backgroundColor: primary,
             child: Text(cl.nome[0].toUpperCase(),
-                style: TextStyle(color: Colors.white, fontSize: 12)),
+                style: const TextStyle(color: Colors.white, fontSize: 12)),
           ),
           label: cl.fullName,
           selected: _filterClientId == cl.id,
@@ -354,7 +367,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-// ── FILTER CHIP ──────────────────────────────────────────────────────────────
+// ── FILTER CHIP ──────────────────────────────────────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -377,8 +390,8 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: Duration(milliseconds: 150),
-        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: active ? color.withOpacity(0.12) : Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -391,7 +404,7 @@ class _FilterChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14, color: active ? color : Colors.grey),
-            SizedBox(width: 5),
+            const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
@@ -401,7 +414,7 @@ class _FilterChip extends StatelessWidget {
               ),
             ),
             if (onClear != null) ...[
-              SizedBox(width: 4),
+              const SizedBox(width: 4),
               GestureDetector(
                 onTap: onClear,
                 child: Icon(Icons.close, size: 13, color: color),
@@ -414,7 +427,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── PICKER SHEET ─────────────────────────────────────────────────────────────
+// ── PICKER SHEET ───────────────────────────────────────────────────────────────────────────
 class _PickerSheet extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -425,23 +438,23 @@ class _PickerSheet extends StatelessWidget {
     final maxHeight = MediaQuery.of(context).size.height * 0.8;
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Center(
             child: Container(
-              margin: EdgeInsets.only(top: 12, bottom: 16),
+              margin: const EdgeInsets.only(top: 12, bottom: 16),
               width: 40, height: 4,
               decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
           Flexible(
             child: SingleChildScrollView(
               child: Column(children: children),
@@ -453,7 +466,7 @@ class _PickerSheet extends StatelessWidget {
   }
 }
 
-// ── PICKER ITEM ───────────────────────────────────────────────────────────────
+// ── PICKER ITEM ────────────────────────────────────────────────────────────────────────────
 class _PickerItem extends StatelessWidget {
   final Widget leading;
   final String label;
