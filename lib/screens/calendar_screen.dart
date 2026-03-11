@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,17 +20,19 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedWeek = DateTime.now();
 
-  // ── FILTRI ────────────────────────────────────────────────────
   String? _filterUserId;
   String? _filterRoomId;
   String? _filterClientId;
 
-  // Dati per i dropdown
-  List<Map<String, dynamic>> _users = [];   // {uid, displayName, personaColor}
+  List<Map<String, dynamic>> _users = [];
   List<Room> _rooms = [];
   List<Client> _clients = [];
 
   final _db = FirebaseFirestore.instance;
+
+  // Subscriptions da cancellare nel dispose()
+  StreamSubscription? _roomsSub;
+  StreamSubscription? _clientsSub;
 
   @override
   void initState() {
@@ -37,9 +40,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadFilterData();
   }
 
+  @override
+  void dispose() {
+    _roomsSub?.cancel();
+    _clientsSub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _loadFilterData() async {
-    // Utenti
+    // Utenti (one-shot, nessun stream)
     final usersSnap = await _db.collection('users').get();
+    if (!mounted) return;
     setState(() {
       _users = usersSnap.docs.map((d) => {
         'uid': d.id,
@@ -49,10 +60,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
 
     // Stanze
-    RoomService().getRooms().listen((rooms) => setState(() => _rooms = rooms));
+    _roomsSub = RoomService().getRooms().listen((rooms) {
+      if (!mounted) return;
+      setState(() => _rooms = rooms);
+    });
 
-    // Clienti (solo non archiviati)
-    ClientService().getClients().listen((clients) => setState(() => _clients = clients));
+    // Clienti
+    _clientsSub = ClientService().getClients().listen((clients) {
+      if (!mounted) return;
+      setState(() => _clients = clients);
+    });
   }
 
   void _previousWeek() => setState(() =>
@@ -112,8 +129,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       drawer: AppDrawer(),
       body: Column(
         children: [
-
-          // ── BARRA FILTRI ─────────────────────────────────────────
           Container(
             color: Colors.grey[50],
             padding: EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -121,8 +136,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-
-                  // FILTRO PERSONA
                   _FilterChip(
                     icon: Icons.person,
                     label: _filterUserId != null
@@ -137,8 +150,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         : null,
                   ),
                   SizedBox(width: 8),
-
-                  // FILTRO STANZA
                   _FilterChip(
                     icon: Icons.meeting_room,
                     label: _filterRoomId != null
@@ -153,8 +164,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         : null,
                   ),
                   SizedBox(width: 8),
-
-                  // FILTRO CLIENTE
                   _FilterChip(
                     icon: Icons.business_center,
                     label: _filterClientId != null
@@ -168,8 +177,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ? () => setState(() => _filterClientId = null)
                         : null,
                   ),
-
-                  // RESET TUTTO (visibile solo se almeno 2 filtri attivi)
                   if (_hasActiveFilters) ...[
                     SizedBox(width: 8),
                     GestureDetector(
@@ -193,8 +200,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
             ),
           ),
-
-          // ── NAVIGAZIONE SETTIMANA ─────────────────────────────────
           Container(
             color: primary.withOpacity(0.05),
             padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -208,11 +213,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 Text(
                   _weekLabel(),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: primary,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: primary),
                 ),
                 IconButton(
                   icon: Icon(Icons.chevron_right),
@@ -222,8 +223,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ],
             ),
           ),
-
-          // ── CALENDARIO SETTIMANALE ────────────────────────────────
           Expanded(
             child: WeeklyCalendar(
               focusedWeek: _focusedWeek,
@@ -259,60 +258,52 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  // ── PICKER DIALOGS ───────────────────────────────────────────────────────
-
-void _showUserPicker(BuildContext context, Color primary) {
-  // ✅ Guard: se la lista è ancora vuota non aprire il picker
-  if (_users.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Caricamento utenti in corso...')),
-    );
-    return;
-  }
-
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true, // ✅ Permette al modale di occupare più spazio
-    builder: (_) => _PickerSheet(
-      title: 'Filtra per Persona',
-      children: _users.map((u) {
-        final hex = (u['personaColor'] as String).replaceAll('#', '');
-        Color c;
-        try {
-          c = Color(int.parse('FF$hex', radix: 16));
-        } catch (_) {
-          c = Colors.blueGrey;
-        }
-        final displayName = u['displayName'] as String? ?? 'Utente';
-        return _PickerItem(
-          leading: CircleAvatar(
-            radius: 14,
-            backgroundColor: c,
-            child: Text(
-              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+  void _showUserPicker(BuildContext context, Color primary) {
+    if (_users.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Caricamento utenti in corso...')),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _PickerSheet(
+        title: 'Filtra per Persona',
+        children: _users.map((u) {
+          final hex = (u['personaColor'] as String).replaceAll('#', '');
+          Color c;
+          try { c = Color(int.parse('FF$hex', radix: 16)); }
+          catch (_) { c = Colors.blueGrey; }
+          final displayName = u['displayName'] as String? ?? 'Utente';
+          return _PickerItem(
+            leading: CircleAvatar(
+              radius: 14,
+              backgroundColor: c,
+              child: Text(
+                displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
             ),
-          ),
-          label: displayName,
-          selected: _filterUserId == u['uid'],
-          onTap: () {
-            setState(() => _filterUserId =
-                _filterUserId == u['uid'] ? null : u['uid'] as String);
-            Navigator.pop(context);
-          },
-        );
-      }).toList(),
-    ),
-  );
-}
-
+            label: displayName,
+            selected: _filterUserId == u['uid'],
+            onTap: () {
+              setState(() => _filterUserId =
+                  _filterUserId == u['uid'] ? null : u['uid'] as String);
+              Navigator.pop(context);
+            },
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   void _showRoomPicker(BuildContext context, Color primary) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true, // ✅ Permette al modale di occupare più spazio se serve
+      isScrollControlled: true,
       builder: (_) => _PickerSheet(
         title: 'Filtra per Stanza',
         children: _rooms.map((r) {
@@ -320,14 +311,15 @@ void _showUserPicker(BuildContext context, Color primary) {
           try { c = Color(int.parse('FF${r.color.replaceAll("#", "")}', radix: 16)); }
           catch (_) { c = Colors.grey; }
           return _PickerItem(
-            leading: Container(width: 28, height: 28,
+            leading: Container(
+              width: 28, height: 28,
               decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6)),
-              child: Icon(Icons.meeting_room, color: Colors.white, size: 16)),
+              child: Icon(Icons.meeting_room, color: Colors.white, size: 16),
+            ),
             label: r.name,
             selected: _filterRoomId == r.id,
             onTap: () {
-              setState(() => _filterRoomId =
-                  _filterRoomId == r.id ? null : r.id);
+              setState(() => _filterRoomId = _filterRoomId == r.id ? null : r.id);
               Navigator.pop(context);
             },
           );
@@ -340,18 +332,20 @@ void _showUserPicker(BuildContext context, Color primary) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true, // ✅ Permette al modale di estendersi fino al 90% dello schermo
+      isScrollControlled: true,
       builder: (_) => _PickerSheet(
         title: 'Filtra per Cliente',
         children: _clients.map((cl) => _PickerItem(
-          leading: CircleAvatar(radius: 14, backgroundColor: primary,
+          leading: CircleAvatar(
+            radius: 14,
+            backgroundColor: primary,
             child: Text(cl.nome[0].toUpperCase(),
-                style: TextStyle(color: Colors.white, fontSize: 12))),
+                style: TextStyle(color: Colors.white, fontSize: 12)),
+          ),
           label: cl.fullName,
           selected: _filterClientId == cl.id,
           onTap: () {
-            setState(() => _filterClientId =
-                _filterClientId == cl.id ? null : cl.id);
+            setState(() => _filterClientId = _filterClientId == cl.id ? null : cl.id);
             Navigator.pop(context);
           },
         )).toList(),
@@ -360,7 +354,7 @@ void _showUserPicker(BuildContext context, Color primary) {
   }
 }
 
-// ── WIDGET FILTRO CHIP ───────────────────────────────────────────────────────
+// ── FILTER CHIP ──────────────────────────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -420,7 +414,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── BOTTOM SHEET PICKER ──────────────────────────────────────────────────────
+// ── PICKER SHEET ─────────────────────────────────────────────────────────────
 class _PickerSheet extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -428,42 +422,29 @@ class _PickerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calcoliamo una safe height massima (es. 80% dello schermo)
     final maxHeight = MediaQuery.of(context).size.height * 0.8;
-
     return Container(
-      // Limitiamo l'altezza per far scattare lo scroll
-      constraints: BoxConstraints(
-        maxHeight: maxHeight,
-      ),
+      constraints: BoxConstraints(maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.fromLTRB(16, 0, 16, 32),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // Occupa solo lo spazio necessario (fino a maxHeight)
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle drag
           Center(
             child: Container(
               margin: EdgeInsets.only(top: 12, bottom: 16),
               width: 40, height: 4,
-              decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          // Titolo
-          Text(title,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           SizedBox(height: 12),
-          // ✅ LISTA SCORREVOLE: Il segreto è Flexible + SingleChildScrollView
           Flexible(
             child: SingleChildScrollView(
-              child: Column(
-                children: children,
-              ),
+              child: Column(children: children),
             ),
           ),
         ],
@@ -472,6 +453,7 @@ class _PickerSheet extends StatelessWidget {
   }
 }
 
+// ── PICKER ITEM ───────────────────────────────────────────────────────────────
 class _PickerItem extends StatelessWidget {
   final Widget leading;
   final String label;
@@ -490,8 +472,7 @@ class _PickerItem extends StatelessWidget {
     return ListTile(
       leading: leading,
       title: Text(label,
-          style: TextStyle(
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+          style: TextStyle(fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
       trailing: selected
           ? Icon(Icons.check_circle, color: primary)
           : Icon(Icons.radio_button_unchecked, color: Colors.grey[300]),
