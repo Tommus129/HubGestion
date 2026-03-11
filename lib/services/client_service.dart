@@ -4,39 +4,43 @@ import '../models/client.dart';
 class ClientService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // Stream real-time (usato nel calendario filtri)
-  Stream<List<Client>> getClients() {
-    return _db
-        .collection('clients')
-        .where('archiviato', isEqualTo: false)
-        .orderBy('cognome')
+  // Stream real-time con supporto archiviati (usato in ClientsListScreen)
+  Stream<List<Client>> getClients({bool includeArchived = false}) {
+    Query query = _db.collection('clients').orderBy('cognome');
+    if (!includeArchived) {
+      query = query.where('archiviato', isEqualTo: false);
+    }
+    return query
         .snapshots()
         .map((s) => s.docs.map((d) => Client.fromFirestore(d)).toList());
   }
 
   // One-shot per form (non serve real-time)
-  Future<List<Client>> getClientsOnce() async {
-    final snap = await _db
-        .collection('clients')
-        .where('archiviato', isEqualTo: false)
-        .orderBy('cognome')
-        .get();
+  Future<List<Client>> getClientsOnce({bool includeArchived = false}) async {
+    Query query = _db.collection('clients').orderBy('cognome');
+    if (!includeArchived) {
+      query = query.where('archiviato', isEqualTo: false);
+    }
+    final snap = await query.get();
     return snap.docs.map((d) => Client.fromFirestore(d)).toList();
+  }
+
+  Future<String> createClient(Client client) async {
+    final doc = await _db.collection('clients').add(client.toFirestore());
+    return doc.id;
   }
 
   Future<void> addClient(Client client) async {
     await _db.collection('clients').add(client.toFirestore());
   }
 
-  Future<void> updateClient(
-      String id, Map<String, dynamic> data) async {
+  Future<void> updateClient(String id, Map<String, dynamic> data) async {
     await _db.collection('clients').doc(id).update(data);
   }
 
-  Future<void> archiveClient(String id) async {
-    await _db.collection('clients')
-        .doc(id)
-        .update({'archiviato': true});
+  // Archivia o riattiva un cliente (toggle con parametro opzionale)
+  Future<void> archiveClient(String id, [bool archive = true]) async {
+    await _db.collection('clients').doc(id).update({'archiviato': archive});
   }
 
   Future<Client?> getClientById(String id) async {
