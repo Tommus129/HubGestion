@@ -4,10 +4,7 @@ import '../models/client.dart';
 class ClientService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // Stream real-time — 3 modalità:
-  //   getClients()                     → solo attivi
-  //   getClients(includeArchived:true) → tutti
-  //   getClients(onlyArchived:true)    → solo archiviati
+  // Stream real-time — usato solo dove serve aggiornamento live
   Stream<List<Client>> getClients({
     bool includeArchived = false,
     bool onlyArchived = false,
@@ -23,7 +20,7 @@ class ClientService {
         .map((s) => s.docs.map((d) => Client.fromFirestore(d)).toList());
   }
 
-  // One-shot per form
+  // One-shot per form e filtri calendario
   Future<List<Client>> getClientsOnce({
     bool includeArchived = false,
     bool onlyArchived = false,
@@ -36,6 +33,50 @@ class ClientService {
     }
     final snap = await query.get();
     return snap.docs.map((d) => Client.fromFirestore(d)).toList();
+  }
+
+  // Paginazione: prima pagina
+  Future<({List<Client> clients, DocumentSnapshot? lastDoc})> getClientsPaged({
+    bool includeArchived = false,
+    bool onlyArchived = false,
+    int pageSize = 50,
+  }) async {
+    Query query = _db
+        .collection('clients')
+        .orderBy('cognome')
+        .limit(pageSize);
+    if (onlyArchived) {
+      query = query.where('archived', isEqualTo: true);
+    } else if (!includeArchived) {
+      query = query.where('archived', isEqualTo: false);
+    }
+    final snap = await query.get();
+    final clients = snap.docs.map((d) => Client.fromFirestore(d)).toList();
+    final lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+    return (clients: clients, lastDoc: lastDoc);
+  }
+
+  // Paginazione: pagina successiva
+  Future<({List<Client> clients, DocumentSnapshot? lastDoc})> getClientsNextPage({
+    required DocumentSnapshot lastDoc,
+    bool includeArchived = false,
+    bool onlyArchived = false,
+    int pageSize = 50,
+  }) async {
+    Query query = _db
+        .collection('clients')
+        .orderBy('cognome')
+        .startAfterDocument(lastDoc)
+        .limit(pageSize);
+    if (onlyArchived) {
+      query = query.where('archived', isEqualTo: true);
+    } else if (!includeArchived) {
+      query = query.where('archived', isEqualTo: false);
+    }
+    final snap = await query.get();
+    final clients = snap.docs.map((d) => Client.fromFirestore(d)).toList();
+    final newLastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+    return (clients: clients, lastDoc: newLastDoc);
   }
 
   Future<String> createClient(Client client) async {
@@ -51,7 +92,6 @@ class ClientService {
     await _db.collection('clients').doc(id).update(data);
   }
 
-  // Archivia o riattiva un cliente (toggle)
   Future<void> archiveClient(String id, [bool archive = true]) async {
     await _db.collection('clients').doc(id).update({'archived': archive});
   }
