@@ -37,8 +37,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadFilterData();
   }
 
-  // Tutto one-shot: rooms e clients cambiano raramente, non serve real-time.
-  // Questo elimina 2 stream Firestore sempre aperti e il relativo lag.
   Future<void> _loadFilterData() async {
     try {
       final results = await Future.wait([
@@ -51,10 +49,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
       final rooms = results[1] as List<Room>;
       final clients = results[2] as List<Client>;
       setState(() {
-        _users = usersSnap.docs.map((d) => {
-          'uid': d.id,
-          'displayName': d.data()['displayName'] ?? d.data()['email'] ?? 'Utente',
-          'personaColor': d.data()['personaColor'] ?? '#607D8B',
+        _users = usersSnap.docs.map((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return {
+            'uid': d.id,
+            'displayName': data['displayName'] ?? data['email'] ?? 'Utente',
+            'personaColor': data['personaColor'] ?? '#607D8B',
+          };
         }).toList();
         _rooms = rooms;
         _clients = clients;
@@ -118,7 +119,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
             tooltip: 'Oggi',
             onPressed: _goToday,
           ),
-          // Ricarica filtri manualmente (utile se aggiungi clienti/stanze)
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Aggiorna filtri',
@@ -367,7 +367,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-// ── FILTER CHIP ──────────────────────────────────────────────────────────────────────────
+// ── FILTER CHIP ──────────────────────────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -427,7 +427,7 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── PICKER SHEET ───────────────────────────────────────────────────────────────────────────
+// ── PICKER SHEET ─────────────────────────────────────────────────────────────
 class _PickerSheet extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -466,7 +466,7 @@ class _PickerSheet extends StatelessWidget {
   }
 }
 
-// ── PICKER ITEM ────────────────────────────────────────────────────────────────────────────
+// ── PICKER ITEM ───────────────────────────────────────────────────────────────
 class _PickerItem extends StatelessWidget {
   final Widget leading;
   final String label;
