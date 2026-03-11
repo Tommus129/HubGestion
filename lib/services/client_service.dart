@@ -8,7 +8,7 @@ class ClientService {
   Stream<List<Client>> getClients({bool includeArchived = false}) {
     Query query = _db.collection('clients').orderBy('cognome');
     if (!includeArchived) {
-      query = query.where('archiviato', isEqualTo: false);
+      query = query.where('archived', isEqualTo: false);
     }
     return query
         .snapshots()
@@ -19,7 +19,7 @@ class ClientService {
   Future<List<Client>> getClientsOnce({bool includeArchived = false}) async {
     Query query = _db.collection('clients').orderBy('cognome');
     if (!includeArchived) {
-      query = query.where('archiviato', isEqualTo: false);
+      query = query.where('archived', isEqualTo: false);
     }
     final snap = await query.get();
     return snap.docs.map((d) => Client.fromFirestore(d)).toList();
@@ -38,9 +38,9 @@ class ClientService {
     await _db.collection('clients').doc(id).update(data);
   }
 
-  // Archivia o riattiva un cliente (toggle con parametro opzionale)
+  // Archivia o riattiva un cliente (toggle)
   Future<void> archiveClient(String id, [bool archive = true]) async {
-    await _db.collection('clients').doc(id).update({'archiviato': archive});
+    await _db.collection('clients').doc(id).update({'archived': archive});
   }
 
   Future<Client?> getClientById(String id) async {
