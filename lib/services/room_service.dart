@@ -19,6 +19,11 @@ class RoomService {
     return snap.docs.map((d) => Room.fromFirestore(d)).toList();
   }
 
+  /// Alias di addRoom — usato da rooms_screen
+  Future<void> createRoom(Room room) async {
+    await _db.collection('rooms').add(room.toFirestore());
+  }
+
   Future<void> addRoom(Room room) async {
     await _db.collection('rooms').add(room.toFirestore());
   }

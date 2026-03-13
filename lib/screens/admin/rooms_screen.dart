@@ -1,31 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/room.dart';
 import '../../services/room_service.dart';
 import '../../widgets/app_drawer.dart';
 
 class RoomsScreen extends StatelessWidget {
-  final RoomService _roomService = RoomService();
+  const RoomsScreen({super.key});
+
+  final _roomService = const _RoomServiceHolder();
 
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final roomService = RoomService();
 
     return Scaffold(
-      appBar: AppBar(title: Text('Stanze')),
-      drawer: AppDrawer(),
+      appBar: AppBar(title: const Text('Stanze')),
+      drawer: const AppDrawer(),
       body: StreamBuilder<List<Room>>(
-        stream: _roomService.getRooms(),
+        stream: roomService.getRooms(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.meeting_room, size: 64, color: Colors.grey[300]),
+                  Icon(Icons.meeting_room, size: 64, color: Color(0xFFBDBDBD)),
                   SizedBox(height: 16),
                   Text('Nessuna stanza', style: TextStyle(color: Colors.grey, fontSize: 18)),
                   SizedBox(height: 8),
@@ -36,26 +38,33 @@ class RoomsScreen extends StatelessWidget {
           }
           final rooms = snapshot.data!;
           return ListView.builder(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             itemCount: rooms.length,
             itemBuilder: (context, i) {
               final room = rooms[i];
               final color = Color(int.parse('FF${room.color.replaceAll("#", "")}', radix: 16));
               return Card(
-                margin: EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: Container(
-                    width: 48, height: 48,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.meeting_room, color: Colors.white),
+                    child: const Icon(Icons.meeting_room, color: Colors.white),
                   ),
-                  title: Text(room.name, style: TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(room.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(room.capacity != null ? 'Capacità: ${room.capacity} persone' : room.note ?? ''),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(icon: Icon(Icons.edit, color: primary), onPressed: () => _showRoomDialog(context, primary, room: room)),
-                      IconButton(icon: Icon(Icons.delete, color: Colors.red), onPressed: () => _confirmDelete(context, room)),
+                      IconButton(
+                        icon: Icon(Icons.edit, color: primary),
+                        onPressed: () => _showRoomDialog(context, primary, room: room),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _confirmDelete(context, room),
+                      ),
                     ],
                   ),
                 ),
@@ -64,10 +73,12 @@ class RoomsScreen extends StatelessWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showRoomDialog(context, primary),
-        icon: Icon(Icons.add, color: Colors.white),
-        label: Text('Nuova Stanza', style: TextStyle(color: Colors.white)),
+      floatingActionButton: Builder(
+        builder: (context) => FloatingActionButton.extended(
+          onPressed: () => _showRoomDialog(context, Theme.of(context).colorScheme.primary),
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('Nuova Stanza', style: TextStyle(color: Colors.white)),
+        ),
       ),
     );
   }
@@ -94,24 +105,46 @@ class RoomsScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(controller: nameController, decoration: InputDecoration(labelText: 'Nome stanza *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-                SizedBox(height: 16),
-                TextField(controller: capacityController, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Capacità (opzionale)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-                SizedBox(height: 16),
-                TextField(controller: noteController, decoration: InputDecoration(labelText: 'Note (opzionale)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
-                SizedBox(height: 16),
-                Text('Colore:', style: TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: 'Nome stanza *',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: capacityController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Capacità (opzionale)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: noteController,
+                  decoration: InputDecoration(
+                    labelText: 'Note (opzionale)',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Colore:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
                 Wrap(
-                  spacing: 8, runSpacing: 8,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: colors.map((c) {
                     final col = Color(int.parse('FF${c.replaceAll("#", "")}', radix: 16));
                     return GestureDetector(
                       onTap: () => setDialogState(() => selectedColor = c),
                       child: Container(
-                        width: 36, height: 36,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: col, shape: BoxShape.circle,
+                          color: col,
+                          shape: BoxShape.circle,
                           border: selectedColor == c ? Border.all(color: Colors.black, width: 3) : null,
                         ),
                       ),
@@ -122,16 +155,32 @@ class RoomsScreen extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annulla'),
+            ),
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.isEmpty) return;
-                final newRoom = Room(id: room?.id, name: nameController.text, color: selectedColor, capacity: int.tryParse(capacityController.text), note: noteController.text);
-                if (room == null) { await RoomService().createRoom(newRoom); }
-                else { await RoomService().updateRoom(room.id!, newRoom.toFirestore()); }
+                final newRoom = Room(
+                  id: room?.id,
+                  name: nameController.text,
+                  color: selectedColor,
+                  capacity: int.tryParse(capacityController.text),
+                  note: noteController.text,
+                );
+                if (room == null) {
+                  await RoomService().createRoom(newRoom);
+                } else {
+                  await RoomService().updateRoom(room.id!, newRoom.toFirestore());
+                }
+                if (!context.mounted) return;
                 Navigator.pop(context);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primary,
+                foregroundColor: Colors.white,
+              ),
               child: Text(room == null ? 'Crea' : 'Salva'),
             ),
           ],
@@ -144,17 +193,32 @@ class RoomsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Elimina Stanza'),
+        title: const Text('Elimina Stanza'),
         content: Text('Vuoi eliminare "${room.name}"? Gli appuntamenti esistenti non saranno eliminati.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Annulla')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annulla'),
+          ),
           ElevatedButton(
-            onPressed: () async { await RoomService().deleteRoom(room.id!); Navigator.pop(context); },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: Text('Elimina'),
+            onPressed: () async {
+              await RoomService().deleteRoom(room.id!);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Elimina'),
           ),
         ],
       ),
     );
   }
+}
+
+// Workaround to avoid instance field in StatelessWidget
+class _RoomServiceHolder {
+  const _RoomServiceHolder();
 }
