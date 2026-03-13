@@ -2,14 +2,45 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Client {
   final String? id;
+
+  // Anagrafica base
   final String nome;
   final String cognome;
+  final String? dataNascita;     // es. "1990-05-23"
+  final String? luogoNascita;
+  final String? sesso;           // "M" | "F"
+
+  // Contatti
   final String? email;
   final String? telefono;
-  final String? note;
-  final String? genitori;
+  final String? telefonoSecondario;
+  final String? pec;
+
+  // Residenza / domicilio
+  final String? indirizzo;       // via + numero civico
+  final String? cap;
+  final String? citta;
+  final String? provincia;       // es. "GE"
+  final String? nazione;         // default "Italia"
+
+  // Dati fiscali
   final String? codiceFiscale;
-  final String? indirizzo;
+
+  // Fatturazione (persona fisica)
+  final String? indirizzoFatturazione; // se diverso dalla residenza
+  final String? capFatturazione;
+  final String? cittaFatturazione;
+  final String? provinciaFatturazione;
+  final String? nazioneFatturazione;
+  final String? codiceSdi;       // Codice Destinatario SDI (7 cifre)
+
+  // Genitori / tutore
+  final String? genitori;
+
+  // Note
+  final String? note;
+
+  // Stato
   final bool archived;
   final bool isSocio;
 
@@ -17,12 +48,27 @@ class Client {
     this.id,
     required this.nome,
     required this.cognome,
+    this.dataNascita,
+    this.luogoNascita,
+    this.sesso,
     this.email,
     this.telefono,
-    this.note,
-    this.genitori,
-    this.codiceFiscale,
+    this.telefonoSecondario,
+    this.pec,
     this.indirizzo,
+    this.cap,
+    this.citta,
+    this.provincia,
+    this.nazione,
+    this.codiceFiscale,
+    this.indirizzoFatturazione,
+    this.capFatturazione,
+    this.cittaFatturazione,
+    this.provinciaFatturazione,
+    this.nazioneFatturazione,
+    this.codiceSdi,
+    this.genitori,
+    this.note,
     this.archived = false,
     this.isSocio = true,
   });
@@ -31,7 +77,6 @@ class Client {
 
   factory Client.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    // Retrocompatibilità: alcuni doc vecchi usano 'archiviato', i nuovi 'archived'
     final isArchived =
         (data['archived'] as bool?) ??
         (data['archiviato'] as bool?) ??
@@ -40,12 +85,27 @@ class Client {
       id: doc.id,
       nome: data['nome'] ?? '',
       cognome: data['cognome'] ?? '',
+      dataNascita: data['dataNascita'],
+      luogoNascita: data['luogoNascita'],
+      sesso: data['sesso'],
       email: data['email'],
       telefono: data['telefono'],
-      note: data['note'],
-      genitori: data['genitori'],
-      codiceFiscale: data['codiceFiscale'],
+      telefonoSecondario: data['telefonoSecondario'],
+      pec: data['pec'],
       indirizzo: data['indirizzo'],
+      cap: data['cap'],
+      citta: data['citta'],
+      provincia: data['provincia'],
+      nazione: data['nazione'],
+      codiceFiscale: data['codiceFiscale'],
+      indirizzoFatturazione: data['indirizzoFatturazione'],
+      capFatturazione: data['capFatturazione'],
+      cittaFatturazione: data['cittaFatturazione'],
+      provinciaFatturazione: data['provinciaFatturazione'],
+      nazioneFatturazione: data['nazioneFatturazione'],
+      codiceSdi: data['codiceSdi'],
+      genitori: data['genitori'],
+      note: data['note'],
       archived: isArchived,
       isSocio: data['isSocio'] ?? true,
     );
@@ -55,12 +115,27 @@ class Client {
     return {
       'nome': nome,
       'cognome': cognome,
+      'dataNascita': dataNascita ?? '',
+      'luogoNascita': luogoNascita ?? '',
+      'sesso': sesso ?? '',
       'email': email ?? '',
       'telefono': telefono ?? '',
-      'note': note ?? '',
-      'genitori': genitori ?? '',
-      'codiceFiscale': codiceFiscale ?? '',
+      'telefonoSecondario': telefonoSecondario ?? '',
+      'pec': pec ?? '',
       'indirizzo': indirizzo ?? '',
+      'cap': cap ?? '',
+      'citta': citta ?? '',
+      'provincia': provincia ?? '',
+      'nazione': nazione ?? 'Italia',
+      'codiceFiscale': codiceFiscale ?? '',
+      'indirizzoFatturazione': indirizzoFatturazione ?? '',
+      'capFatturazione': capFatturazione ?? '',
+      'cittaFatturazione': cittaFatturazione ?? '',
+      'provinciaFatturazione': provinciaFatturazione ?? '',
+      'nazioneFatturazione': nazioneFatturazione ?? 'Italia',
+      'codiceSdi': codiceSdi ?? '',
+      'genitori': genitori ?? '',
+      'note': note ?? '',
       'archived': archived,
       'isSocio': isSocio,
       'createdAt': FieldValue.serverTimestamp(),
