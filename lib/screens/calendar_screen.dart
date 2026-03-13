@@ -104,7 +104,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    // auth usato solo per il drawer — non serve estrarlo qui
     Provider.of<AuthService>(context);
 
     return Scaffold(
@@ -132,7 +131,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
         ],
       ),
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(),
       body: Column(
         children: [
           Container(

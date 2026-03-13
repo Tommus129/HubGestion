@@ -6,8 +6,6 @@ import '../../widgets/app_drawer.dart';
 class RoomsScreen extends StatelessWidget {
   const RoomsScreen({super.key});
 
-  final _roomService = const _RoomServiceHolder();
-
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
@@ -15,7 +13,7 @@ class RoomsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Stanze')),
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(),
       body: StreamBuilder<List<Room>>(
         stream: roomService.getRooms(),
         builder: (context, snapshot) {
@@ -216,9 +214,4 @@ class RoomsScreen extends StatelessWidget {
       ),
     );
   }
-}
-
-// Workaround to avoid instance field in StatelessWidget
-class _RoomServiceHolder {
-  const _RoomServiceHolder();
 }
