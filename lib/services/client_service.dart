@@ -1,8 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/client.dart';
 
+/// Dimensione di pagina condivisa tra ClientService e ClientProvider.
+const int kClientPageSize = 50;
+
 class ClientService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ── Stream real-time (alias usato dal ClientProvider) ──────────────
+  Stream<List<Client>> getClientsStream({
+    bool includeArchived = false,
+    bool onlyArchived = false,
+  }) =>
+      getClients(
+          includeArchived: includeArchived, onlyArchived: onlyArchived);
 
   // Stream real-time — usato solo dove serve aggiornamento live
   Stream<List<Client>> getClients({
@@ -39,7 +50,7 @@ class ClientService {
   Future<({List<Client> clients, DocumentSnapshot? lastDoc})> getClientsPaged({
     bool includeArchived = false,
     bool onlyArchived = false,
-    int pageSize = 50,
+    int pageSize = kClientPageSize,
   }) async {
     Query query = _db
         .collection('clients')
@@ -61,7 +72,7 @@ class ClientService {
     required DocumentSnapshot lastDoc,
     bool includeArchived = false,
     bool onlyArchived = false,
-    int pageSize = 50,
+    int pageSize = kClientPageSize,
   }) async {
     Query query = _db
         .collection('clients')
@@ -77,6 +88,50 @@ class ClientService {
     final clients = snap.docs.map((d) => Client.fromFirestore(d)).toList();
     final newLastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
     return (clients: clients, lastDoc: newLastDoc);
+  }
+
+  /// Ritorna i DocumentSnapshot grezzi per la paginazione del ClientProvider.
+  Future<List<DocumentSnapshot>> getClientsPageRaw({
+    DocumentSnapshot? lastDocument,
+    bool includeArchived = false,
+    bool onlyArchived = false,
+    int pageSize = kClientPageSize,
+  }) async {
+    Query query = _db
+        .collection('clients')
+        .orderBy('cognome')
+        .limit(pageSize);
+    if (onlyArchived) {
+      query = query.where('archived', isEqualTo: true);
+    } else if (!includeArchived) {
+      query = query.where('archived', isEqualTo: false);
+    }
+    if (lastDocument != null) {
+      query = query.startAfterDocument(lastDocument);
+    }
+    final snap = await query.get();
+    return snap.docs;
+  }
+
+  /// Ricerca prefix per cognome (usata dal ClientProvider).
+  Future<List<Client>> searchClients(
+    String query, {
+    bool includeArchived = false,
+  }) async {
+    final q = query.trim();
+    if (q.isEmpty) return getClientsOnce(includeArchived: includeArchived);
+    // Firestore prefix search: cognome >= q && cognome < q+"\uf8ff"
+    final end = '$q\uf8ff';
+    Query fsQuery = _db
+        .collection('clients')
+        .orderBy('cognome')
+        .where('cognome', isGreaterThanOrEqualTo: q)
+        .where('cognome', isLessThan: end);
+    if (!includeArchived) {
+      fsQuery = fsQuery.where('archived', isEqualTo: false);
+    }
+    final snap = await fsQuery.get();
+    return snap.docs.map((d) => Client.fromFirestore(d)).toList();
   }
 
   Future<String> createClient(Client client) async {
