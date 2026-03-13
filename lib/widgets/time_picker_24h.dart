@@ -5,10 +5,15 @@ class TimePicker24h extends StatefulWidget {
   final String label;
   final Function(TimeOfDay) onChanged;
 
-  TimePicker24h({required this.initialTime, required this.label, required this.onChanged});
+  const TimePicker24h({
+    super.key,
+    required this.initialTime,
+    required this.label,
+    required this.onChanged,
+  });
 
   @override
-  _TimePicker24hState createState() => _TimePicker24hState();
+  State<TimePicker24h> createState() => _TimePicker24hState();
 }
 
 class _TimePicker24hState extends State<TimePicker24h> {
@@ -48,7 +53,7 @@ class _TimePicker24hState extends State<TimePicker24h> {
         builder: (ctx, setS) => AlertDialog(
           title: Text(widget.label,
               style: TextStyle(color: primary, fontWeight: FontWeight.bold)),
-          contentPadding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+          contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           content: SizedBox(
             width: 340,
             child: Column(
@@ -56,10 +61,10 @@ class _TimePicker24hState extends State<TimePicker24h> {
               children: [
                 // DISPLAY ORARIO
                 Container(
-                  margin: EdgeInsets.only(bottom: 12),
-                  padding: EdgeInsets.symmetric(vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: primary.withOpacity(0.07),
+                    color: primary.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
@@ -79,10 +84,12 @@ class _TimePicker24hState extends State<TimePicker24h> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text('Ora',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                           color: Colors.grey[600])),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Wrap(
                   spacing: 4,
                   runSpacing: 4,
@@ -91,7 +98,8 @@ class _TimePicker24hState extends State<TimePicker24h> {
                     return GestureDetector(
                       onTap: () => setS(() => tmpH = h),
                       child: Container(
-                        width: 40, height: 36,
+                        width: 40,
+                        height: 36,
                         decoration: BoxDecoration(
                           color: sel ? primary : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
@@ -100,10 +108,12 @@ class _TimePicker24hState extends State<TimePicker24h> {
                           ),
                         ),
                         child: Center(
-                          child: Text(_pad(h),
+                          child: Text(
+                            _pad(h),
                             style: TextStyle(
                               color: sel ? Colors.white : Colors.grey[700],
-                              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                              fontWeight:
+                                  sel ? FontWeight.bold : FontWeight.normal,
                               fontSize: 13,
                             ),
                           ),
@@ -113,16 +123,18 @@ class _TimePicker24hState extends State<TimePicker24h> {
                   }),
                 ),
 
-                SizedBox(height: 14),
+                const SizedBox(height: 14),
 
                 // MINUTI
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text('Minuti',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                           color: Colors.grey[600])),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
@@ -132,7 +144,8 @@ class _TimePicker24hState extends State<TimePicker24h> {
                     return GestureDetector(
                       onTap: () => setS(() => tmpM = m),
                       child: Container(
-                        width: 44, height: 36,
+                        width: 44,
+                        height: 36,
                         decoration: BoxDecoration(
                           color: sel ? primary : Colors.transparent,
                           borderRadius: BorderRadius.circular(6),
@@ -141,10 +154,12 @@ class _TimePicker24hState extends State<TimePicker24h> {
                           ),
                         ),
                         child: Center(
-                          child: Text(_pad(m),
+                          child: Text(
+                            _pad(m),
                             style: TextStyle(
                               color: sel ? Colors.white : Colors.grey[700],
-                              fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                              fontWeight:
+                                  sel ? FontWeight.bold : FontWeight.normal,
                               fontSize: 13,
                             ),
                           ),
@@ -153,22 +168,26 @@ class _TimePicker24hState extends State<TimePicker24h> {
                     );
                   }).toList(),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Annulla', style: TextStyle(color: Colors.grey)),
+              child: const Text('Annulla',
+                  style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () {
-                setState(() { _hour = tmpH; _minute = tmpM; });
+                setState(() {
+                  _hour = tmpH;
+                  _minute = tmpM;
+                });
                 _emit();
                 Navigator.pop(context);
               },
-              child: Text('Conferma'),
+              child: const Text('Conferma'),
             ),
           ],
         ),
@@ -183,14 +202,17 @@ class _TimePicker24hState extends State<TimePicker24h> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(widget.label,
-            style: TextStyle(fontSize: 12, color: Colors.grey[600],
+            style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
                 fontWeight: FontWeight.w500)),
-        SizedBox(height: 4),
+        const SizedBox(height: 4),
         InkWell(
           onTap: () => _showPicker(context),
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               border: Border.all(color: Colors.grey[400]!),
               borderRadius: BorderRadius.circular(8),
@@ -199,7 +221,7 @@ class _TimePicker24hState extends State<TimePicker24h> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.access_time, size: 16, color: primary),
-                SizedBox(width: 6),
+                const SizedBox(width: 6),
                 Text(
                   '${_pad(_hour)} : ${_pad(_minute)}',
                   style: TextStyle(
