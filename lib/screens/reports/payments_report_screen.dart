@@ -12,8 +12,10 @@ import '../../utils/date_helpers.dart';
 import '../../widgets/app_drawer.dart';
 
 class PaymentsReportScreen extends StatefulWidget {
+  const PaymentsReportScreen({super.key});
+
   @override
-  _PaymentsReportScreenState createState() => _PaymentsReportScreenState();
+  State<PaymentsReportScreen> createState() => _PaymentsReportScreenState();
 }
 
 class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
@@ -121,7 +123,6 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       NumberFormat.currency(locale: 'it_IT', symbol: '€').format(v);
 
   Future<void> _generatePdf() async {
-    // ✅ Filtro PDF: SOLO pagamenti NON fatturati
     final List<Appointment> pdfData = _filtered.where((a) => !a.fatturato).toList();
 
     if (pdfData.isEmpty) {
@@ -138,7 +139,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         : _periodo == 'mese' ? 'Mese corrente'
         : _periodo == 'anno' ? 'Anno corrente' : 'Sempre';
 
-    final fattLabel = 'Non fatturati'; // sempre non fatturati nel PDF
+    final fattLabel = 'Non fatturati';
     final pagLabel = _filtroPagato == 'tutti' ? 'Tutti'
         : _filtroPagato == 'si' ? 'Pagati' : 'Non pagati';
 
@@ -355,9 +356,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.08),
+                      color: Colors.blue.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withOpacity(0.25)),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.25)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.info_outline, color: Colors.blue, size: 16),
@@ -369,7 +370,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
 
                 if (canSeeAll) ...[
                   DropdownButtonFormField<String?>(
-                    value: _filtroUserId,
+                    initialValue: _filtroUserId,
                     decoration: InputDecoration(
                       labelText: 'Visualizza report di',
                       prefixIcon: const Icon(Icons.person_outline, size: 18),
@@ -401,7 +402,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                                 child: Row(children: [
                                   CircleAvatar(
                                     radius: 10,
-                                    backgroundColor: primary.withOpacity(0.12),
+                                    backgroundColor: primary.withValues(alpha: 0.12),
                                     child: Text(
                                       (u['name'] as String).isNotEmpty
                                           ? (u['name'] as String)[0].toUpperCase()
@@ -561,7 +562,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: Padding(
@@ -605,7 +606,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               Expanded(child: Row(children: [
                 CircleAvatar(
                   radius: 12,
-                  backgroundColor: primary.withOpacity(0.12),
+                  backgroundColor: primary.withValues(alpha: 0.12),
                   child: Text(
                     personaNome.isNotEmpty ? personaNome[0].toUpperCase() : 'U',
                     style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.bold),
@@ -626,7 +627,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               Expanded(child: Row(children: [
                 CircleAvatar(
                   radius: 12,
-                  backgroundColor: Colors.teal.withOpacity(0.12),
+                  backgroundColor: Colors.teal.withValues(alpha: 0.12),
                   child: Text(
                     clienteNome.isNotEmpty && clienteNome != '—'
                         ? clienteNome[0].toUpperCase() : 'C',
@@ -690,7 +691,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: active ? activeColor.withOpacity(0.12) : Colors.grey[100],
+            color: active ? activeColor.withValues(alpha: 0.12) : Colors.grey[100],
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: active ? activeColor : Colors.grey.shade300,
@@ -725,9 +726,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
+          color: color.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.18)),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -736,7 +737,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               Container(
                 width: 26, height: 26,
                 decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6)),
                 child: Icon(icon, size: 14, color: color),
               ),
@@ -753,7 +754,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
               borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
                 value: pct,
-                backgroundColor: color.withOpacity(0.12),
+                backgroundColor: color.withValues(alpha: 0.12),
                 valueColor: AlwaysStoppedAnimation<Color>(color),
                 minHeight: 4,
               ),
@@ -772,7 +773,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: active ? primary.withOpacity(0.12) : Colors.grey[100],
+          color: active ? primary.withValues(alpha: 0.12) : Colors.grey[100],
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
               color: active ? primary : Colors.grey.shade300,
