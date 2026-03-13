@@ -213,7 +213,6 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
     );
   }
 
-  // ── Detail bottom sheet ───────────────────────────────────────────
   void _showClientDetail(BuildContext context, Client client, Color primary) {
     showModalBottomSheet(
       context: context,
@@ -595,31 +594,30 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
     }
   }
 
-  // Costruisce una riga CAP + Città + Prov. con proporzioni fisse
+  /// Riga CAP (20%) + Città (50%) + Provincia (30%) — proporzioni relative, mai troncate
   Widget _rowCapCittaProv(
-      TextEditingController capCtrl,
-      TextEditingController cittaCtrl,
-      TextEditingController provCtrl,
-      ) {
+    TextEditingController capCtrl,
+    TextEditingController cittaCtrl,
+    TextEditingController provCtrl,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // CAP: 15% della larghezza
         Flexible(
-          flex: 15,
-          child: _field(capCtrl, 'CAP', Icons.local_post_office_outlined, keyboard: TextInputType.number),
+          flex: 20,
+          child: _field(capCtrl, 'CAP', Icons.local_post_office_outlined,
+              keyboard: TextInputType.number),
         ),
-        const SizedBox(width: 10),
-        // Città: 55%
+        const SizedBox(width: 12),
         Flexible(
-          flex: 55,
+          flex: 50,
           child: _field(cittaCtrl, 'Città', Icons.location_on_outlined),
         ),
-        const SizedBox(width: 10),
-        // Provincia: 30%
+        const SizedBox(width: 12),
         Flexible(
           flex: 30,
-          child: _field(provCtrl, 'Provincia', Icons.map_outlined, caps: TextCapitalization.characters),
+          child: _field(provCtrl, 'Provincia', Icons.map_outlined,
+              caps: TextCapitalization.characters),
         ),
       ],
     );
@@ -627,177 +625,209 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
 
   @override
   Widget build(BuildContext context) {
+    final primary = widget.primary;
+
+    // TabBar estratta dall'AppBar → nessun conflitto con "X" e "SALVA"
+    final tabBar = Material(
+      color: primary,
+      child: TabBar(
+        controller: _tabController,
+        isScrollable: false,
+        indicatorColor: Colors.white,
+        indicatorWeight: 3,
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.white70,
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+        tabs: const [
+          Tab(icon: Icon(Icons.person_outline, size: 20), text: 'Anagrafica'),
+          Tab(icon: Icon(Icons.phone_outlined, size: 20), text: 'Contatti'),
+          Tab(icon: Icon(Icons.receipt_long_outlined, size: 20), text: 'Fatturazione'),
+          Tab(icon: Icon(Icons.note_outlined, size: 20), text: 'Altro'),
+        ],
+      ),
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.client == null ? 'Nuovo Cliente' : 'Modifica Cliente'),
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: false,
-          tabs: const [
-            Tab(icon: Icon(Icons.person_outline, size: 18), text: 'Anagrafica'),
-            Tab(icon: Icon(Icons.phone_outlined, size: 18), text: 'Contatti'),
-            Tab(icon: Icon(Icons.receipt_long_outlined, size: 18), text: 'Fatturazione'),
-            Tab(icon: Icon(Icons.note_outlined, size: 18), text: 'Altro'),
-          ],
-          labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 12),
-        ),
+        title: Text(widget.client == null ? 'Nuovo Cliente' : 'Modifica Cliente',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         actions: [
           _saving
               ? const Padding(
                   padding: EdgeInsets.all(16),
-                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                  child: SizedBox(width: 22, height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)),
                 )
               : TextButton(
                   onPressed: _save,
-                  child: const Text('SALVA', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  child: const Text('SALVA',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16,
+                          letterSpacing: 1)),
                 ),
         ],
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          // ── TAB 1: Anagrafica ────────────────────────────────────────
-          _TabScroll(children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          tabBar,
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
               children: [
-                Expanded(child: _field(_nome, 'Nome *', Icons.person)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_cognome, 'Cognome *', Icons.person)),
+                // ── TAB 1: Anagrafica
+                _TabScroll(children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _field(_nome, 'Nome *', Icons.person)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _field(_cognome, 'Cognome *', Icons.person)),
+                    ],
+                  ),
+                  _SocioToggle(value: _isSocio, onChanged: (v) => setState(() => _isSocio = v)),
+                  const SizedBox(height: 20),
+                  _SectionDivider('Dati anagrafici'),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _field(_dataNascita, 'Data di nascita', Icons.cake_outlined,
+                          hint: 'gg/mm/aaaa', keyboard: TextInputType.datetime)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _field(_luogoNascita, 'Luogo di nascita', Icons.location_city_outlined)),
+                    ],
+                  ),
+                  _SectionDivider('Sesso'),
+                  Row(children: [
+                    Expanded(
+                      child: _RadioCard(
+                        label: 'Maschio',
+                        icon: Icons.male,
+                        value: 'M',
+                        groupValue: _sesso,
+                        primary: primary,
+                        onChanged: (v) => setState(() => _sesso = v),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _RadioCard(
+                        label: 'Femmina',
+                        icon: Icons.female,
+                        value: 'F',
+                        groupValue: _sesso,
+                        primary: primary,
+                        onChanged: (v) => setState(() => _sesso = v),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  _SectionDivider('Residenza'),
+                  _field(_indirizzo, 'Indirizzo (via + numero civico)', Icons.home_outlined),
+                  _rowCapCittaProv(_cap, _citta, _provincia),
+                  _field(_nazione, 'Nazione', Icons.flag_outlined),
+                ]),
+
+                // ── TAB 2: Contatti
+                _TabScroll(children: [
+                  _field(_email, 'Email', Icons.email_outlined, keyboard: TextInputType.emailAddress),
+                  _field(_pec, 'PEC', Icons.mark_email_read_outlined, keyboard: TextInputType.emailAddress),
+                  _field(_telefono, 'Telefono', Icons.phone_outlined, keyboard: TextInputType.phone),
+                  _field(_telefonoSecondario, 'Telefono secondario', Icons.phone_callback_outlined, keyboard: TextInputType.phone),
+                ]),
+
+                // ── TAB 3: Fatturazione
+                _TabScroll(children: [
+                  _SectionDivider('Dati fiscali'),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _field(_codiceFiscale, 'Codice Fiscale', Icons.badge_outlined,
+                          caps: TextCapitalization.characters)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _field(_codiceSdi, 'Codice SDI', Icons.receipt_long_outlined,
+                          caps: TextCapitalization.characters)),
+                    ],
+                  ),
+                  _SectionDivider('Indirizzo di fatturazione'),
+                  _SwitchCard(
+                    label: 'Uguale alla residenza',
+                    subtitle: 'Copia i dati dalla tab Anagrafica',
+                    value: _fattUgualeResidenza,
+                    onChanged: (v) {
+                      setState(() => _fattUgualeResidenza = v);
+                      if (v) _copyResidenzaToFatturazione();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (!_fattUgualeResidenza) ...[
+                    _field(_indirizzoFatt, 'Indirizzo fatturazione', Icons.home_work_outlined),
+                    _rowCapCittaProv(_capFatt, _cittaFatt, _provinciaFatt),
+                    _field(_nazioneFatt, 'Nazione', Icons.flag_outlined),
+                  ],
+                ]),
+
+                // ── TAB 4: Altro
+                _TabScroll(children: [
+                  _field(_genitori, 'Genitori / Tutore', Icons.people_outlined),
+                  const SizedBox(height: 4),
+                  _SectionDivider('Note'),
+                  TextField(
+                    controller: _note,
+                    maxLines: 7,
+                    style: const TextStyle(fontSize: 15),
+                    decoration: InputDecoration(
+                      labelText: 'Note',
+                      alignLabelWithHint: true,
+                      floatingLabelBehavior: FloatingLabelBehavior.auto,
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.only(bottom: 100),
+                        child: Icon(Icons.note_outlined),
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    ),
+                  ),
+                ]),
               ],
             ),
-            _SocioToggle(value: _isSocio, onChanged: (v) => setState(() => _isSocio = v)),
-            const SizedBox(height: 16),
-            _SectionDivider('Dati anagrafici'),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _field(_dataNascita, 'Data di nascita', Icons.cake_outlined,
-                    hint: 'gg/mm/aaaa', keyboard: TextInputType.datetime)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_luogoNascita, 'Luogo di nascita', Icons.location_city_outlined)),
-              ],
-            ),
-            _SectionDivider('Sesso'),
-            Row(children: [
-              Expanded(
-                child: RadioListTile<String>(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Maschio', style: TextStyle(fontSize: 14)),
-                  value: 'M', groupValue: _sesso,
-                  onChanged: (v) => setState(() => _sesso = v),
-                ),
-              ),
-              Expanded(
-                child: RadioListTile<String>(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Femmina', style: TextStyle(fontSize: 14)),
-                  value: 'F', groupValue: _sesso,
-                  onChanged: (v) => setState(() => _sesso = v),
-                ),
-              ),
-            ]),
-            const SizedBox(height: 4),
-            _SectionDivider('Residenza'),
-            _field(_indirizzo, 'Indirizzo (via + numero civico)', Icons.home_outlined),
-            _rowCapCittaProv(_cap, _citta, _provincia),
-            _field(_nazione, 'Nazione', Icons.flag_outlined),
-          ]),
-
-          // ── TAB 2: Contatti ──────────────────────────────────────────
-          _TabScroll(children: [
-            _field(_email, 'Email', Icons.email_outlined, keyboard: TextInputType.emailAddress),
-            _field(_pec, 'PEC', Icons.mark_email_read_outlined, keyboard: TextInputType.emailAddress),
-            _field(_telefono, 'Telefono', Icons.phone_outlined, keyboard: TextInputType.phone),
-            _field(_telefonoSecondario, 'Telefono secondario', Icons.phone_callback_outlined, keyboard: TextInputType.phone),
-          ]),
-
-          // ── TAB 3: Fatturazione ─────────────────────────────────────
-          _TabScroll(children: [
-            _SectionDivider('Dati fiscali'),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _field(_codiceFiscale, 'Codice Fiscale', Icons.badge_outlined,
-                    caps: TextCapitalization.characters)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_codiceSdi, 'Codice SDI', Icons.receipt_long_outlined,
-                    caps: TextCapitalization.characters)),
-              ],
-            ),
-            _SectionDivider('Indirizzo di fatturazione'),
-            SwitchListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Uguale alla residenza', style: TextStyle(fontSize: 14)),
-              subtitle: const Text('Copia automaticamente i dati dalla tab Anagrafica', style: TextStyle(fontSize: 11)),
-              value: _fattUgualeResidenza,
-              onChanged: (v) {
-                setState(() => _fattUgualeResidenza = v);
-                if (v) _copyResidenzaToFatturazione();
-              },
-            ),
-            const SizedBox(height: 8),
-            if (!_fattUgualeResidenza) ...[
-              _field(_indirizzoFatt, 'Indirizzo fatturazione', Icons.home_work_outlined),
-              _rowCapCittaProv(_capFatt, _cittaFatt, _provinciaFatt),
-              _field(_nazioneFatt, 'Nazione', Icons.flag_outlined),
-            ],
-          ]),
-
-          // ── TAB 4: Altro ─────────────────────────────────────────────
-          _TabScroll(children: [
-            _field(_genitori, 'Genitori / Tutore', Icons.people_outlined),
-            _SectionDivider('Note'),
-            TextField(
-              controller: _note,
-              maxLines: 6,
-              decoration: InputDecoration(
-                labelText: 'Note',
-                alignLabelWithHint: true,
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.only(bottom: 80),
-                  child: Icon(Icons.note_outlined),
-                ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            ),
-          ]),
+          ),
         ],
       ),
     );
   }
 
-  Widget _field(TextEditingController ctrl, String label, IconData icon, {
+  Widget _field(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
     TextInputType keyboard = TextInputType.text,
     TextCapitalization caps = TextCapitalization.words,
     String? hint,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: ctrl,
         keyboardType: keyboard,
         textCapitalization: caps,
+        style: const TextStyle(fontSize: 15),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          // Evita label sovrapposto al valore precompilato
+          prefixIcon: Icon(icon, size: 22),
+          // FIX: label non si sovrappone mai a valori precompilati
           floatingLabelBehavior: FloatingLabelBehavior.auto,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         ),
       ),
     );
   }
 }
 
-// ── Helper widgets ───────────────────────────────────────────────────────────
+// ── Helper widgets ──────────────────────────────────────────────────────
 
-/// Centra il contenuto su schermi larghi (web/desktop) con max 640px
+/// Centra il contenuto su schermi larghi con max 680px
 class _TabScroll extends StatelessWidget {
   final List<Widget> children;
   const _TabScroll({required this.children});
@@ -808,9 +838,9 @@ class _TabScroll extends StatelessWidget {
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 680),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: children,
@@ -827,16 +857,106 @@ class _SectionDivider extends StatelessWidget {
   const _SectionDivider(this.label);
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 14, top: 4),
+        padding: const EdgeInsets.only(bottom: 16, top: 4),
         child: Row(children: [
           const Expanded(child: Divider()),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500], letterSpacing: 0.5)),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(label,
+                style: TextStyle(fontSize: 12, color: Colors.grey[500],
+                    fontWeight: FontWeight.w600, letterSpacing: 0.5)),
           ),
           const Expanded(child: Divider()),
         ]),
       );
+}
+
+/// Card-style radio button per il sesso
+class _RadioCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final String value;
+  final String? groupValue;
+  final Color primary;
+  final ValueChanged<String?> onChanged;
+  const _RadioCard({
+    required this.label, required this.icon, required this.value,
+    required this.groupValue, required this.primary, required this.onChanged,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final selected = groupValue == value;
+    return GestureDetector(
+      onTap: () => onChanged(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: selected ? primary.withOpacity(0.08) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? primary : Colors.grey.shade300,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 22, color: selected ? primary : Colors.grey),
+          const SizedBox(width: 10),
+          Text(label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? primary : Colors.grey[700],
+              )),
+          const Spacer(),
+          Radio<String>(
+            value: value, groupValue: groupValue,
+            onChanged: onChanged,
+            activeColor: primary,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Card-style switch (es. "Uguale alla residenza")
+class _SwitchCard extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _SwitchCard({
+    required this.label, required this.subtitle,
+    required this.value, required this.onChanged,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: value ? primary.withOpacity(0.06) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: value ? primary.withOpacity(0.4) : Colors.grey.shade300,
+        ),
+      ),
+      child: SwitchListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        title: Text(label,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                color: value ? primary : Colors.black87)),
+        subtitle: Text(subtitle,
+            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        value: value,
+        onChanged: onChanged,
+        activeColor: primary,
+      ),
+    );
+  }
 }
 
 class _SocioToggle extends StatelessWidget {
@@ -847,18 +967,21 @@ class _SocioToggle extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
           color: value ? Colors.green.withOpacity(0.05) : Colors.orange.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: value ? Colors.green.withOpacity(0.35) : Colors.orange.withOpacity(0.45)),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: value ? Colors.green.withOpacity(0.4) : Colors.orange.withOpacity(0.5)),
         ),
         child: SwitchListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           title: Text(
             value ? 'Socio' : 'Non Socio (+15%)',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: value ? Colors.green[700] : Colors.orange[800]),
+            style: TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 15,
+                color: value ? Colors.green[700] : Colors.orange[800]),
           ),
-          secondary: Icon(value ? Icons.card_membership : Icons.person_off,
-              color: value ? Colors.green[700] : Colors.orange[800], size: 20),
+          secondary: Icon(
+              value ? Icons.card_membership : Icons.person_off,
+              color: value ? Colors.green[700] : Colors.orange[800], size: 22),
           value: value,
           activeColor: Colors.green,
           onChanged: onChanged,
@@ -866,7 +989,7 @@ class _SocioToggle extends StatelessWidget {
       );
 }
 
-// ── CLIENT TILE ───────────────────────────────────────────────────────────────
+// ── CLIENT TILE ──────────────────────────────────────────────────────────────
 class _ClientTile extends StatelessWidget {
   final Client client;
   final Color primary;
@@ -909,30 +1032,41 @@ class _ClientTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: [
-                      Text(client.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(client.fullName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       const SizedBox(width: 6),
                       _BadgeSocio(client: client),
                       if (client.archived) ...[ const SizedBox(width: 6), const _BadgeArchiviato() ],
                     ]),
                     const SizedBox(height: 2),
-                    if ((client.email ?? '').isNotEmpty) _InfoRow(icon: Icons.email_outlined, text: client.email!),
-                    if ((client.telefono ?? '').isNotEmpty) _InfoRow(icon: Icons.phone_outlined, text: client.telefono!),
+                    if ((client.email ?? '').isNotEmpty)
+                      _InfoRow(icon: Icons.email_outlined, text: client.email!),
+                    if ((client.telefono ?? '').isNotEmpty)
+                      _InfoRow(icon: Icons.phone_outlined, text: client.telefono!),
                     if ((client.citta ?? '').isNotEmpty)
-                      _InfoRow(icon: Icons.location_on_outlined,
-                          text: '${client.citta}${(client.provincia ?? '').isNotEmpty ? " (${client.provincia})" : ""}'),
-                    if ((client.codiceFiscale ?? '').isNotEmpty) _InfoRow(icon: Icons.badge_outlined, text: client.codiceFiscale!),
+                      _InfoRow(
+                        icon: Icons.location_on_outlined,
+                        text: '${client.citta}${(client.provincia ?? '').isNotEmpty ? " (${client.provincia})" : ""}',
+                      ),
+                    if ((client.codiceFiscale ?? '').isNotEmpty)
+                      _InfoRow(icon: Icons.badge_outlined, text: client.codiceFiscale!),
                     if ((client.note ?? '').isNotEmpty)
                       Row(children: [
                         Icon(Icons.note_outlined, size: 11, color: Colors.amber[700]),
                         const SizedBox(width: 3),
-                        Text('Note presenti', style: TextStyle(fontSize: 11, color: Colors.amber[700], fontStyle: FontStyle.italic)),
+                        Text('Note presenti',
+                            style: TextStyle(fontSize: 11, color: Colors.amber[700],
+                                fontStyle: FontStyle.italic)),
                       ]),
                   ],
                 ),
               ),
               PopupMenuButton(
                 itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 16), SizedBox(width: 8), Text('Modifica')])),
+                  const PopupMenuItem(value: 'edit',
+                      child: Row(children: [
+                        Icon(Icons.edit, size: 16), SizedBox(width: 8), Text('Modifica'),
+                      ])),
                   PopupMenuItem(
                     value: 'archive',
                     child: Row(children: [
@@ -942,7 +1076,10 @@ class _ClientTile extends StatelessWidget {
                     ]),
                   ),
                 ],
-                onSelected: (v) { if (v == 'edit') onEdit(); if (v == 'archive') onArchive(); },
+                onSelected: (v) {
+                  if (v == 'edit') onEdit();
+                  if (v == 'archive') onArchive();
+                },
               ),
             ],
           ),
@@ -959,11 +1096,18 @@ class _BadgeSocio extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: client.isSocio ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+          color: client.isSocio
+              ? Colors.green.withOpacity(0.12)
+              : Colors.orange.withOpacity(0.12),
           borderRadius: BorderRadius.circular(4),
         ),
-        child: Text(client.isSocio ? 'Socio' : 'Non Socio',
-            style: TextStyle(fontSize: 10, color: client.isSocio ? Colors.green[700] : Colors.orange[800], fontWeight: FontWeight.w600)),
+        child: Text(
+          client.isSocio ? 'Socio' : 'Non Socio',
+          style: TextStyle(
+              fontSize: 10,
+              color: client.isSocio ? Colors.green[700] : Colors.orange[800],
+              fontWeight: FontWeight.w600),
+        ),
       );
 }
 
@@ -972,8 +1116,10 @@ class _BadgeArchiviato extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
-        child: Text('Archiviato', style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        decoration: BoxDecoration(
+            color: Colors.grey[200], borderRadius: BorderRadius.circular(4)),
+        child: Text('Archiviato',
+            style: TextStyle(fontSize: 10, color: Colors.grey[600])),
       );
 }
 
@@ -986,7 +1132,10 @@ class _InfoRow extends StatelessWidget {
         children: [
           Icon(icon, size: 11, color: Colors.grey[500]),
           const SizedBox(width: 3),
-          Flexible(child: Text(text, style: TextStyle(fontSize: 11, color: Colors.grey[600]), overflow: TextOverflow.ellipsis)),
+          Flexible(
+              child: Text(text,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  overflow: TextOverflow.ellipsis)),
         ],
       );
 }
