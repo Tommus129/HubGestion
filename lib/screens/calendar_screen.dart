@@ -13,8 +13,10 @@ import 'appointment_form_screen.dart';
 import 'appointment_detail_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
+  const CalendarScreen({super.key});
+
   @override
-  _CalendarScreenState createState() => _CalendarScreenState();
+  State<CalendarScreen> createState() => _CalendarScreenState();
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
@@ -102,7 +104,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primary = theme.colorScheme.primary;
-    final auth = Provider.of<AuthService>(context);
+    // auth usato solo per il drawer — non serve estrarlo qui
+    Provider.of<AuthService>(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -129,7 +132,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
         ],
       ),
-      drawer: AppDrawer(),
+      drawer: const AppDrawer(),
       body: Column(
         children: [
           Container(
@@ -197,13 +200,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.08),
+                          color: Colors.red.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                         ),
-                        child: Row(children: [
+                        child: const Row(children: [
                           Icon(Icons.clear_all, size: 14, color: Colors.red),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4),
                           Text('Reset', style: TextStyle(fontSize: 12, color: Colors.red)),
                         ]),
                       ),
@@ -214,25 +217,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           Container(
-            color: primary.withOpacity(0.05),
+            color: primary.withValues(alpha: 0.05),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: _previousWeek,
-                  color: primary,
-                ),
-                Text(
-                  _weekLabel(),
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: primary),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: _nextWeek,
-                  color: primary,
-                ),
+                IconButton(icon: const Icon(Icons.chevron_left), onPressed: _previousWeek, color: primary),
+                Text(_weekLabel(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: primary)),
+                IconButton(icon: const Icon(Icons.chevron_right), onPressed: _nextWeek, color: primary),
               ],
             ),
           ),
@@ -244,15 +236,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
               filterClientId: _filterClientId,
               onTapAppointment: (apt) => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => AppointmentDetailScreen(appointment: apt),
-                ),
+                MaterialPageRoute(builder: (_) => AppointmentDetailScreen(appointment: apt)),
               ),
               onTapSlot: (dateTime) => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => AppointmentFormScreen(selectedDay: dateTime),
-                ),
+                MaterialPageRoute(builder: (_) => AppointmentFormScreen(selectedDay: dateTime)),
               ),
             ),
           ),
@@ -261,9 +249,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => AppointmentFormScreen(selectedDay: DateTime.now()),
-          ),
+          MaterialPageRoute(builder: (_) => AppointmentFormScreen(selectedDay: DateTime.now())),
         ),
         icon: const Icon(Icons.add),
         label: const Text('Nuovo'),
@@ -367,7 +353,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 }
 
-// ── FILTER CHIP ──────────────────────────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -393,7 +378,7 @@ class _FilterChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? color.withOpacity(0.12) : Colors.white,
+          color: active ? color.withValues(alpha: 0.12) : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: active ? color : Colors.grey.shade300,
@@ -405,20 +390,14 @@ class _FilterChip extends StatelessWidget {
           children: [
             Icon(icon, size: 14, color: active ? color : Colors.grey),
             const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                color: active ? color : Colors.grey[700],
-              ),
-            ),
+            Text(label, style: TextStyle(
+              fontSize: 12,
+              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+              color: active ? color : Colors.grey[700],
+            )),
             if (onClear != null) ...[
               const SizedBox(width: 4),
-              GestureDetector(
-                onTap: onClear,
-                child: Icon(Icons.close, size: 13, color: color),
-              ),
+              GestureDetector(onTap: onClear, child: Icon(Icons.close, size: 13, color: color)),
             ],
           ],
         ),
@@ -427,7 +406,6 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── PICKER SHEET ─────────────────────────────────────────────────────────────
 class _PickerSheet extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -455,18 +433,13 @@ class _PickerSheet extends StatelessWidget {
           ),
           Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(children: children),
-            ),
-          ),
+          Flexible(child: SingleChildScrollView(child: Column(children: children))),
         ],
       ),
     );
   }
 }
 
-// ── PICKER ITEM ───────────────────────────────────────────────────────────────
 class _PickerItem extends StatelessWidget {
   final Widget leading;
   final String label;
@@ -484,13 +457,12 @@ class _PickerItem extends StatelessWidget {
     final primary = Theme.of(context).colorScheme.primary;
     return ListTile(
       leading: leading,
-      title: Text(label,
-          style: TextStyle(fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+      title: Text(label, style: TextStyle(fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
       trailing: selected
           ? Icon(Icons.check_circle, color: primary)
           : Icon(Icons.radio_button_unchecked, color: Colors.grey[300]),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      tileColor: selected ? primary.withOpacity(0.05) : null,
+      tileColor: selected ? primary.withValues(alpha: 0.05) : null,
       onTap: onTap,
     );
   }

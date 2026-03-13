@@ -13,10 +13,10 @@ import 'appointment_form_screen.dart';
 
 class AppointmentDetailScreen extends StatefulWidget {
   final Appointment appointment;
-  AppointmentDetailScreen({required this.appointment});
+  const AppointmentDetailScreen({super.key, required this.appointment});
 
   @override
-  _AppointmentDetailScreenState createState() => _AppointmentDetailScreenState();
+  State<AppointmentDetailScreen> createState() => _AppointmentDetailScreenState();
 }
 
 class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
@@ -24,7 +24,6 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   Client? _client;
   Room? _room;
 
-  // uid -> {name, color}
   Map<String, Map<String, dynamic>> _workersData = {};
 
   @override
@@ -36,18 +35,14 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
   Future<void> _loadDetails() async {
     final apt = widget.appointment;
 
-    // Cliente: usa getClientById per una singola lettura cached invece di
-    // aprire uno stream sull'intera collection.
     final client = await ClientService().getClientById(apt.clientId);
     if (mounted && client != null) setState(() => _client = client);
 
-    // Stanza
     RoomService().getRooms().listen((rooms) {
       final match = rooms.where((r) => r.id == apt.roomId);
       if (match.isNotEmpty && mounted) setState(() => _room = match.first);
     });
 
-    // Tutti i lavoratori: userId + workerIds (deduplicati)
     final seen = <String>{};
     final ids = <String>[];
     if (apt.userId.isNotEmpty && seen.add(apt.userId)) ids.add(apt.userId);
@@ -57,9 +52,9 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
 
     final db = FirebaseFirestore.instance;
     final result = <String, Map<String, dynamic>>{};
-    for (final uid in ids) {
+    for (final userId in ids) {
       try {
-        final doc = await db.collection('users').doc(uid).get();
+        final doc = await db.collection('users').doc(userId).get();
         if (doc.exists) {
           final d = doc.data()!;
           final name = d['displayName']?.toString().isNotEmpty == true
@@ -72,7 +67,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           } catch (_) {
             color = Colors.blueGrey;
           }
-          result[uid] = {'name': name, 'color': color, 'isOwner': uid == apt.userId};
+          result[userId] = {'name': name, 'color': color, 'isOwner': userId == apt.userId};
         }
       } catch (_) {}
     }
@@ -83,6 +78,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     await _aptService.updateAppointment(widget.appointment.id!, {
       'fatturato': !widget.appointment.fatturato,
     });
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -90,6 +86,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     await _aptService.updateAppointment(widget.appointment.id!, {
       'pagato': !widget.appointment.pagato,
     });
+    if (!mounted) return;
     Navigator.pop(context);
   }
 
@@ -111,6 +108,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
     );
     if (confirm == true) {
       await _aptService.deleteAppointment(widget.appointment.id!);
+      if (!mounted) return;
       Navigator.pop(context);
     }
   }
@@ -155,37 +153,30 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
-            // ── HEADER ──────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(apt.titolo,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    Text(apt.titolo, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Row(children: [
                       const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                       const SizedBox(width: 6),
-                      Text(DateHelpers.formatDate(apt.data),
-                          style: const TextStyle(color: Colors.grey)),
+                      Text(DateHelpers.formatDate(apt.data), style: const TextStyle(color: Colors.grey)),
                     ]),
                     const SizedBox(height: 4),
                     Row(children: [
                       const Icon(Icons.access_time, size: 16, color: Colors.grey),
                       const SizedBox(width: 6),
-                      Text('${apt.oraInizio} - ${apt.oraFine}',
-                          style: const TextStyle(color: Colors.grey)),
+                      Text('${apt.oraInizio} - ${apt.oraFine}', style: const TextStyle(color: Colors.grey)),
                     ]),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── LAVORATORI ────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -195,21 +186,16 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     Row(children: [
                       Icon(Icons.group, color: primary, size: 20),
                       const SizedBox(width: 8),
-                      Text(
-                        'Lavoratori',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
+                      const Text('Lavoratori', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: primary.withOpacity(0.1),
+                          color: primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text(
-                          '${_workersData.length}',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primary),
-                        ),
+                        child: Text('${_workersData.length}',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primary)),
                       ),
                     ]),
                     const SizedBox(height: 12),
@@ -217,7 +203,6 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                       const Text('Caricamento...', style: TextStyle(color: Colors.grey))
                     else
                       ..._workersData.entries.map((entry) {
-                        final uid     = entry.key;
                         final name    = entry.value['name'] as String;
                         final color   = entry.value['color'] as Color;
                         final isOwner = entry.value['isOwner'] as bool;
@@ -234,24 +219,17 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                                ),
-                              ),
+                              Expanded(child: Text(name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600))),
                               if (isOwner)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: primary.withOpacity(0.1),
+                                    color: primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: primary.withOpacity(0.3)),
+                                    border: Border.all(color: primary.withValues(alpha: 0.3)),
                                   ),
-                                  child: Text(
-                                    'Responsabile',
-                                    style: TextStyle(fontSize: 11, color: primary, fontWeight: FontWeight.bold),
-                                  ),
+                                  child: Text('Responsabile',
+                                      style: TextStyle(fontSize: 11, color: primary, fontWeight: FontWeight.bold)),
                                 ),
                             ],
                           ),
@@ -262,8 +240,6 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── NOTE ─────────────────────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -285,45 +261,34 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: Colors.amber.shade200),
                         ),
-                        child: Text(
-                          apt.note!,
-                          style: const TextStyle(fontSize: 15, height: 1.5),
-                        ),
+                        child: Text(apt.note!, style: const TextStyle(fontSize: 15, height: 1.5)),
                       )
                     else
                       Row(children: [
                         Icon(Icons.info_outline, size: 14, color: Colors.grey.shade400),
                         const SizedBox(width: 6),
-                        Text(
-                          'Nessuna nota',
-                          style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic),
-                        ),
+                        Text('Nessuna nota',
+                            style: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic)),
                       ]),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── STANZA ───────────────────────────────────────────
             if (_room != null) ...[
               Card(
                 child: ListTile(
                   leading: Container(
                     width: 40, height: 40,
-                    decoration: BoxDecoration(
-                        color: roomColor, borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: roomColor, borderRadius: BorderRadius.circular(8)),
                     child: const Icon(Icons.meeting_room, color: Colors.white, size: 20),
                   ),
                   title: const Text('Stanza'),
-                  subtitle: Text(_room!.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(_room!.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 12),
             ],
-
-            // ── CLIENTE ──────────────────────────────────────────
             if (_client != null) ...[
               Card(
                 child: ListTile(
@@ -333,8 +298,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                         style: const TextStyle(color: Colors.white)),
                   ),
                   title: const Text('Cliente'),
-                  subtitle: Text(_client!.fullName,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(_client!.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
                   trailing: _client!.telefono != null && _client!.telefono!.isNotEmpty
                       ? Icon(Icons.phone, color: primary)
                       : null,
@@ -342,8 +306,6 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
               ),
               const SizedBox(height: 12),
             ],
-
-            // ── RIEPILOGO ECONOMICO ─────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -356,15 +318,12 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
                     _infoRow('Ore totali', '${apt.oreTotali}h'),
                     _infoRow('Tariffa', '${DateHelpers.formatCurrency(apt.tariffa)}/ora'),
                     const Divider(),
-                    _infoRow('Totale', DateHelpers.formatCurrency(apt.totale),
-                        bold: true, color: primary),
+                    _infoRow('Totale', DateHelpers.formatCurrency(apt.totale), bold: true, color: primary),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── STATO PAGAMENTO ───────────────────────────────────
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -411,12 +370,11 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-                color: color,
-                fontSize: bold ? 16 : 14,
-              )),
+          Text(value, style: TextStyle(
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            color: color,
+            fontSize: bold ? 16 : 14,
+          )),
         ],
       ),
     );
@@ -434,7 +392,7 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: active ? activeColor.withOpacity(0.1) : Colors.grey[100],
+          color: active ? activeColor.withValues(alpha: 0.1) : Colors.grey[100],
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: active ? activeColor : Colors.grey[300]!),
         ),
@@ -442,11 +400,10 @@ class _AppointmentDetailScreenState extends State<AppointmentDetailScreen> {
           children: [
             Icon(icon, color: active ? activeColor : Colors.grey, size: 28),
             const SizedBox(height: 4),
-            Text(label,
-                style: TextStyle(
-                  color: active ? activeColor : Colors.grey,
-                  fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                )),
+            Text(label, style: TextStyle(
+              color: active ? activeColor : Colors.grey,
+              fontWeight: active ? FontWeight.bold : FontWeight.normal,
+            )),
           ],
         ),
       ),
