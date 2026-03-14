@@ -8,7 +8,6 @@ class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// Permette all'utente di selezionare un file e lo carica su Firebase Storage
   Future<ClientFile?> uploadFilePerCliente({
     required String clientId,
     String? descrizione,
@@ -27,7 +26,8 @@ class StorageService {
         ? _mimeFromExtension(picked.extension!)
         : 'application/octet-stream';
 
-    final path = 'clienti/$clientId/$fileName';
+    // Storage path allineato con la collection Firestore 'clients'
+    final path = 'clients/$clientId/$fileName';
     final ref = _storage.ref().child(path);
     final uploadTask = await ref.putData(
       bytes,
@@ -47,7 +47,7 @@ class StorageService {
     );
 
     final docRef = await _db
-        .collection('clienti')
+        .collection('clients')
         .doc(clientId)
         .collection('files')
         .add(clientFile.toFirestore());
@@ -64,10 +64,9 @@ class StorageService {
     );
   }
 
-  /// Stream dei file di un cliente ordinati per data
   Stream<List<ClientFile>> getFilesStream(String clientId) {
     return _db
-        .collection('clienti')
+        .collection('clients')
         .doc(clientId)
         .collection('files')
         .orderBy('caricatoAt', descending: true)
@@ -75,7 +74,6 @@ class StorageService {
         .map((snap) => snap.docs.map(ClientFile.fromFirestore).toList());
   }
 
-  /// Elimina un file da Storage e da Firestore
   Future<void> eliminaFile(ClientFile file) async {
     try {
       final ref = _storage.refFromURL(file.url);
@@ -83,7 +81,7 @@ class StorageService {
     } catch (_) {}
 
     await _db
-        .collection('clienti')
+        .collection('clients')
         .doc(file.clientId)
         .collection('files')
         .doc(file.id)
