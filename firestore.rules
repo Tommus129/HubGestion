@@ -23,6 +23,12 @@ service cloud.firestore {
     match /clients/{clientId} {
       allow read, create, update: if isLoggedIn();
       allow delete: if isAdminLevel();
+
+      // Subcollection file per ogni cliente
+      match /files/{fileId} {
+        allow read, create, delete: if isLoggedIn();
+        allow update: if isAdminLevel();
+      }
     }
 
     match /appointments/{appointmentId} {
