@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../models/client.dart';
 import '../../services/client_service.dart';
 import '../../widgets/app_drawer.dart';
+import '../../widgets/client_files_widget.dart';
 
 enum _ClientFilter { attivi, tutti, archiviati }
 
@@ -198,6 +199,7 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                       onTap: () => _showClientDetail(context, client, primary),
                       onEdit: () => _showClientDialog(context, primary, client: client),
                       onArchive: () => _clientService.archiveClient(client.id!, !client.archived).then((_) => _loadFirstPage()),
+                      onFiles: () => _showFilesSheet(context, client, primary),
                     );
                   },
                 ),
@@ -213,6 +215,7 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
     );
   }
 
+  // ── Bottom sheet dettaglio cliente ────────────────────────────────────────
   void _showClientDetail(BuildContext context, Client client, Color primary) {
     showModalBottomSheet(
       context: context,
@@ -339,6 +342,10 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   child: Text(client.note!, style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.5)),
                 ),
               ],
+              // ── SEZIONE DOCUMENTI ─────────────────────────────────────
+              const Divider(height: 32),
+              ClientFilesWidget(clientId: client.id!),
+              // ─────────────────────────────────────────────────────────
               const SizedBox(height: 20),
               Row(children: [
                 Expanded(
@@ -362,6 +369,52 @@ class _ClientsListScreenState extends State<ClientsListScreen> {
                   ),
                 ),
               ]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Bottom sheet solo documenti (accessibile dal popup menu) ─────────────
+  void _showFilesSheet(BuildContext context, Client client, Color primary) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.35,
+        maxChildSize: 0.95,
+        builder: (_, scrollCtrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: ListView(
+            controller: scrollCtrl,
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Row(children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: primary,
+                  child: Text(client.nome.isNotEmpty ? client.nome[0].toUpperCase() : 'C',
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(width: 10),
+                Text(client.fullName,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ]),
+              const SizedBox(height: 16),
+              ClientFilesWidget(clientId: client.id!),
             ],
           ),
         ),
@@ -594,7 +647,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
     }
   }
 
-  /// Riga CAP (20%) + Città (50%) + Provincia (30%) — proporzioni relative, mai troncate
   Widget _rowCapCittaProv(
     TextEditingController capCtrl,
     TextEditingController cittaCtrl,
@@ -627,7 +679,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
   Widget build(BuildContext context) {
     final primary = widget.primary;
 
-    // TabBar estratta dall'AppBar → nessun conflitto con "X" e "SALVA"
     final tabBar = Material(
       color: primary,
       child: TabBar(
@@ -674,7 +725,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
             child: TabBarView(
               controller: _tabController,
               children: [
-                // ── TAB 1: Anagrafica
                 _TabScroll(children: [
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -727,7 +777,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
                   _field(_nazione, 'Nazione', Icons.flag_outlined),
                 ]),
 
-                // ── TAB 2: Contatti
                 _TabScroll(children: [
                   _field(_email, 'Email', Icons.email_outlined, keyboard: TextInputType.emailAddress),
                   _field(_pec, 'PEC', Icons.mark_email_read_outlined, keyboard: TextInputType.emailAddress),
@@ -735,7 +784,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
                   _field(_telefonoSecondario, 'Telefono secondario', Icons.phone_callback_outlined, keyboard: TextInputType.phone),
                 ]),
 
-                // ── TAB 3: Fatturazione
                 _TabScroll(children: [
                   _SectionDivider('Dati fiscali'),
                   Row(
@@ -766,7 +814,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
                   ],
                 ]),
 
-                // ── TAB 4: Altro
                 _TabScroll(children: [
                   _field(_genitori, 'Genitori / Tutore', Icons.people_outlined),
                   const SizedBox(height: 4),
@@ -815,7 +862,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
           labelText: label,
           hintText: hint,
           prefixIcon: Icon(icon, size: 22),
-          // FIX: label non si sovrappone mai a valori precompilati
           floatingLabelBehavior: FloatingLabelBehavior.auto,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -827,7 +873,6 @@ class _ClientFormPageState extends State<_ClientFormPage> with SingleTickerProvi
 
 // ── Helper widgets ──────────────────────────────────────────────────────
 
-/// Centra il contenuto su schermi larghi con max 680px
 class _TabScroll extends StatelessWidget {
   final List<Widget> children;
   const _TabScroll({required this.children});
@@ -871,7 +916,6 @@ class _SectionDivider extends StatelessWidget {
       );
 }
 
-/// Card-style radio button per il sesso
 class _RadioCard extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -922,7 +966,6 @@ class _RadioCard extends StatelessWidget {
   }
 }
 
-/// Card-style switch (es. "Uguale alla residenza")
 class _SwitchCard extends StatelessWidget {
   final String label;
   final String subtitle;
@@ -996,6 +1039,7 @@ class _ClientTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onArchive;
+  final VoidCallback onFiles;
 
   const _ClientTile({
     super.key,
@@ -1004,6 +1048,7 @@ class _ClientTile extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onArchive,
+    required this.onFiles,
   });
 
   @override
@@ -1067,6 +1112,10 @@ class _ClientTile extends StatelessWidget {
                       child: Row(children: [
                         Icon(Icons.edit, size: 16), SizedBox(width: 8), Text('Modifica'),
                       ])),
+                  const PopupMenuItem(value: 'files',
+                      child: Row(children: [
+                        Icon(Icons.folder_outlined, size: 16), SizedBox(width: 8), Text('Documenti'),
+                      ])),
                   PopupMenuItem(
                     value: 'archive',
                     child: Row(children: [
@@ -1078,6 +1127,7 @@ class _ClientTile extends StatelessWidget {
                 ],
                 onSelected: (v) {
                   if (v == 'edit') onEdit();
+                  if (v == 'files') onFiles();
                   if (v == 'archive') onArchive();
                 },
               ),
