@@ -14,7 +14,6 @@ import '../../services/auth_service.dart';
 import '../../widgets/app_drawer.dart';
 import '../../utils/date_helpers.dart';
 
-// Download PDF su Flutter Web tramite dart:html
 import 'dart:html' as html;
 
 class ClientReportScreen extends StatefulWidget {
@@ -34,6 +33,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   DateTime? _customTo;
   String _filtroFatturato = 'tutti';
   String _filtroPageto    = 'tutti';
+  String? _filtroLavoratore; // null = tutti
 
   String _pdfFiltro = 'mese';
 
@@ -113,7 +113,26 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     if (_filtroFatturato == 'no') f = f.where((a) => !a.fatturato).toList();
     if (_filtroPageto    == 'si') f = f.where((a) => a.pagato).toList();
     if (_filtroPageto    == 'no') f = f.where((a) => !a.pagato).toList();
+    // Filtro lavoratore
+    if (_filtroLavoratore != null) {
+      f = f.where((a) =>
+          a.userId == _filtroLavoratore ||
+          (a.workerIds?.contains(_filtroLavoratore) ?? false)).toList();
+    }
     setState(() { _appointments = f; _loading = false; });
+  }
+
+  // Lavoratori presenti negli appuntamenti caricati
+  List<MapEntry<String, String>> get _lavoratoriDisponibili {
+    final ids = <String>{};
+    for (final a in _allFetched) {
+      if (a.userId.isNotEmpty) ids.add(a.userId);
+      a.workerIds?.forEach(ids.add);
+    }
+    return ids
+        .map((id) => MapEntry(id, _userNames[id] ?? id))
+        .toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
   }
 
   double get _totGuadagno => _appointments.fold(0, (s, a) => s + a.totale);
@@ -124,7 +143,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   String _formatCurrency(double v) =>
       NumberFormat.currency(locale: 'it_IT', symbol: 'EUR ').format(v);
 
-  // Usa solo ASCII per evitare problemi Unicode nel testo del PDF
   (DateTime, DateTime, String) _pdfRange() {
     final now = DateTime.now();
     switch (_pdfFiltro) {
@@ -132,7 +150,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         final lunedi = now.subtract(Duration(days: now.weekday - 1));
         final start = DateTime(lunedi.year, lunedi.month, lunedi.day);
         final end   = start.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
-        // Usa '/' invece di '-' (U+2013) per evitare problemi Unicode
         final label = 'Settimana ${DateFormat('dd/MM').format(start)} - ${DateFormat('dd/MM/yyyy').format(end)}';
         return (start, end, label);
       case 'mese':
@@ -145,23 +162,27 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     }
   }
 
-  // ── GENERA E SCARICA PDF CON LAYOUT PROFESSIONALE ────────────────
   Future<void> _generatePdf() async {
     if (_selectedClient == null) return;
 
-    // Font con pieno supporto Unicode
     final fontRegular = await PdfGoogleFonts.notoSansRegular();
     final fontBold    = await PdfGoogleFonts.notoSansBold();
 
     final (start, end, periodoLabel) = _pdfRange();
 
-    final List<Appointment> pdfData = _allFetched.where((a) {
+    // Applica anche il filtro lavoratore al PDF
+    List<Appointment> pdfData = _allFetched.where((a) {
       if (a.deleted == true) return false;
       if (a.fatturato == true) return false;
       if (a.data.isBefore(start) || a.data.isAfter(end)) return false;
       return true;
-    }).toList()
-      ..sort((a, b) => a.data.compareTo(b.data));
+    }).toList();
+    if (_filtroLavoratore != null) {
+      pdfData = pdfData.where((a) =>
+          a.userId == _filtroLavoratore ||
+          (a.workerIds?.contains(_filtroLavoratore) ?? false)).toList();
+    }
+    pdfData.sort((a, b) => a.data.compareTo(b.data));
 
     if (pdfData.isEmpty) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -179,6 +200,9 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final totaleImporto = pdfData.fold(0.0, (s, a) => s + a.totale);
     final totPagato     = pdfData.where((a) => a.pagato).fold(0.0, (s, a) => s + a.totale);
     final totNonPagato  = totaleImporto - totPagato;
+    final lavoratoreLabel = _filtroLavoratore != null
+        ? (_userNames[_filtroLavoratore] ?? _filtroLavoratore!)
+        : 'Tutti i lavoratori';
 
     final doc = pw.Document();
 
@@ -187,23 +211,14 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         build: (context) => [
-
-          // ── INTESTAZIONE ───────────────────────────────────────
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text(
-                'PAGAMENTI NON FATTURATI',
-                style: pw.TextStyle(font: fontBold, fontSize: 22),
-              ),
+              pw.Text('PAGAMENTI NON FATTURATI',
+                  style: pw.TextStyle(font: fontBold, fontSize: 22)),
               pw.SizedBox(height: 6),
-              pw.Container(
-                width: double.infinity,
-                height: 3,
-                color: PdfColors.teal600,
-              ),
+              pw.Container(width: double.infinity, height: 3, color: PdfColors.teal600),
               pw.SizedBox(height: 16),
-
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -222,6 +237,12 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       pw.SizedBox(height: 3),
                       pw.Text(periodoLabel,
                           style: pw.TextStyle(font: fontRegular, fontSize: 12)),
+                      pw.SizedBox(height: 10),
+                      pw.Text('Lavoratore',
+                          style: pw.TextStyle(font: fontRegular, fontSize: 10, color: PdfColors.grey600)),
+                      pw.SizedBox(height: 3),
+                      pw.Text(lavoratoreLabel,
+                          style: pw.TextStyle(font: fontBold, fontSize: 12)),
                     ],
                   ),
                   pw.Column(
@@ -242,12 +263,10 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                   ),
                 ],
               ),
-
               pw.SizedBox(height: 24),
             ],
           ),
 
-          // ── TABELLA APPUNTAMENTI ─────────────────────────────
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
             columnWidths: {
@@ -259,7 +278,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               5: const pw.FlexColumnWidth(0.8),
             },
             children: [
-              // Header
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
@@ -271,8 +289,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                   _buildHeaderCell('Pagato', fontBold, align: pw.TextAlign.center),
                 ],
               ),
-
-              // Righe dati
               ...pdfData.map((a) {
                 final persona = _userNames[a.userId] ?? '';
                 final descrizione = a.titolo + (persona.isNotEmpty ? ' ($persona)' : '');
@@ -283,21 +299,9 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       fontRegular,
                     ),
                     _buildDataCell(descrizione, fontRegular),
-                    _buildDataCell(
-                      a.oreTotali.toStringAsFixed(1),
-                      fontRegular,
-                      align: pw.TextAlign.center,
-                    ),
-                    _buildDataCell(
-                      'EUR ${a.tariffa.toStringAsFixed(0)}',
-                      fontRegular,
-                      align: pw.TextAlign.right,
-                    ),
-                    _buildDataCell(
-                      'EUR ${a.totale.toStringAsFixed(2)}',
-                      fontBold,
-                      align: pw.TextAlign.right,
-                    ),
+                    _buildDataCell(a.oreTotali.toStringAsFixed(1), fontRegular, align: pw.TextAlign.center),
+                    _buildDataCell('EUR ${a.tariffa.toStringAsFixed(0)}', fontRegular, align: pw.TextAlign.right),
+                    _buildDataCell('EUR ${a.totale.toStringAsFixed(2)}', fontBold, align: pw.TextAlign.right),
                     _buildDataCell(
                       a.pagato ? 'SI' : 'NO',
                       fontBold,
@@ -312,7 +316,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
           pw.SizedBox(height: 20),
 
-          // ── RIEPILOGO TOTALI ─────────────────────────────────
           pw.Container(
             alignment: pw.Alignment.centerRight,
             child: pw.Container(
@@ -353,8 +356,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           ),
 
           pw.SizedBox(height: 30),
-
-          // ── FOOTER ──────────────────────────────────────────
           pw.Divider(color: PdfColors.grey300),
           pw.SizedBox(height: 8),
           pw.Text(
@@ -376,7 +377,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
         ..setAttribute('download', fileName)
         ..click();
       html.Url.revokeObjectUrl(url);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -391,48 +391,24 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     }
   }
 
-  // ── HELPER PDF CELLS ─────────────────────────────────────────────
   pw.Widget _buildHeaderCell(String text, pw.Font font, {pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(font: font, fontSize: 10),
-        textAlign: align,
-      ),
+      child: pw.Text(text, style: pw.TextStyle(font: font, fontSize: 10), textAlign: align),
     );
   }
 
-  pw.Widget _buildDataCell(
-    String text,
-    pw.Font font, {
-    pw.TextAlign align = pw.TextAlign.left,
-    PdfColor? color,
-  }) {
+  pw.Widget _buildDataCell(String text, pw.Font font, {pw.TextAlign align = pw.TextAlign.left, PdfColor? color}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 9,
-          color: color ?? PdfColors.black,
-        ),
-        textAlign: align,
-        maxLines: 3,
-      ),
+      child: pw.Text(text,
+          style: pw.TextStyle(font: font, fontSize: 9, color: color ?? PdfColors.black),
+          textAlign: align, maxLines: 3),
     );
   }
 
-  pw.Widget _buildTotalRow(
-    String label,
-    String value,
-    pw.Font labelFont,
-    pw.Font valueFont, {
-    double labelSize = 10,
-    double valueSize = 10,
-    PdfColor? valueColor,
-  }) {
+  pw.Widget _buildTotalRow(String label, String value, pw.Font labelFont, pw.Font valueFont,
+      {double labelSize = 10, double valueSize = 10, PdfColor? valueColor}) {
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
@@ -448,6 +424,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     final auth    = Provider.of<AuthService>(context);
     final isAdmin = auth.currentUser?.isAdmin ?? false;
     final hasDati = _allFetched.isNotEmpty;
+    final lavoratori = _lavoratoriDisponibili;
 
     return Scaffold(
       appBar: AppBar(
@@ -464,7 +441,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
       drawer: AppDrawer(),
       body: Column(
         children: [
-
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -472,6 +448,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
+                // Cliente
                 DropdownButtonFormField<Client>(
                   value: _selectedClient,
                   decoration: InputDecoration(
@@ -483,13 +460,48 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                   ),
                   items: _clients.map((c) => DropdownMenuItem(value: c, child: Text(c.fullName))).toList(),
                   onChanged: (v) {
-                    setState(() { _selectedClient = v; _appointments = []; _allFetched = []; });
+                    setState(() {
+                      _selectedClient = v;
+                      _appointments = [];
+                      _allFetched = [];
+                      _filtroLavoratore = null; // reset filtro
+                    });
                     _autoSearch();
                   },
                   hint: const Text('Seleziona cliente'),
                 ),
                 const SizedBox(height: 10),
 
+                // Filtro lavoratore (visibile solo se ci sono appuntamenti)
+                if (hasDati) ...[
+                  DropdownButtonFormField<String?>(
+                    value: _filtroLavoratore,
+                    decoration: InputDecoration(
+                      labelText: 'Lavoratore',
+                      prefixIcon: const Icon(Icons.person_pin_outlined, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Tutti i lavoratori'),
+                      ),
+                      ...lavoratori.map((e) => DropdownMenuItem<String?>(
+                        value: e.key,
+                        child: Text(e.value),
+                      )),
+                    ],
+                    onChanged: (v) {
+                      setState(() => _filtroLavoratore = v);
+                      _applyLocalFilters();
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+
+                // Periodo chips
                 Row(
                   children: [
                     _periodoChip('mese',   'Mese',   primary),
@@ -641,6 +653,11 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primary)),
                       TextSpan(text: '  appuntamenti',
                           style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+                      if (_filtroLavoratore != null)
+                        TextSpan(
+                          text: '  •  ${_userNames[_filtroLavoratore] ?? _filtroLavoratore}',
+                          style: TextStyle(fontSize: 13, color: primary, fontWeight: FontWeight.w600),
+                        ),
                     ],
                   )),
                   Row(children: [
@@ -979,7 +996,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           const SizedBox(width: 5),
           Text(
             value != null
-                ? '${value.day.toString().padLeft(2,'0')}/${value.month.toString().padLeft(2,'0')}/${value.year}'
+                ? '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}'
                 : label,
             style: TextStyle(fontSize: 12,
                 color: value != null ? Colors.black87 : Colors.grey,
