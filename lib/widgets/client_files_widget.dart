@@ -67,12 +67,12 @@ class ClientFilesWidget extends StatelessWidget {
       final file = await _storageService.uploadFilePerCliente(clientId: clientId);
       if (file != null) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('File "\${file.nomeFile}" caricato con successo!')),
+          SnackBar(content: Text('File "${file.nomeFile}" caricato con successo!')),
         );
       }
     } catch (e) {
       scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Errore durante il caricamento: \$e')),
+        SnackBar(content: Text('Errore durante il caricamento: $e')),
       );
     }
   }
@@ -82,7 +82,7 @@ class ClientFilesWidget extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Elimina file'),
-        content: Text('Eliminare "\${file.nomeFile}"?'),
+        content: Text('Eliminare "${file.nomeFile}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -113,7 +113,7 @@ class _FileTile extends StatelessWidget {
       leading: Text(file.icona, style: const TextStyle(fontSize: 28)),
       title: Text(file.nomeFile, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        '\${file.dimensioneFormattata} • \${_formatData(file.caricatoAt)}',
+        '${file.dimensioneFormattata} \u2022 ${_formatData(file.caricatoAt)}',
         style: const TextStyle(fontSize: 12),
       ),
       trailing: Row(
@@ -142,6 +142,9 @@ class _FileTile extends StatelessWidget {
   }
 
   String _formatData(DateTime dt) {
-    return '\${dt.day.toString().padLeft(2, '0')}/\${dt.month.toString().padLeft(2, '0')}/\${dt.year}';
+    final d = dt.day.toString().padLeft(2, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final y = dt.year.toString();
+    return '$d/$m/$y';
   }
 }
