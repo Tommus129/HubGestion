@@ -16,6 +16,9 @@ import '../../utils/date_helpers.dart';
 
 import 'dart:html' as html;
 
+enum SortField { data, totale, ore }
+enum SortDir   { asc, desc }
+
 class ClientReportScreen extends StatefulWidget {
   @override
   _ClientReportScreenState createState() => _ClientReportScreenState();
@@ -33,7 +36,11 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
   DateTime? _customTo;
   String _filtroFatturato = 'tutti';
   String _filtroPageto    = 'tutti';
-  String? _filtroLavoratore; // null = tutti
+  String? _filtroLavoratore;
+
+  // Ordinamento: default più recente
+  SortField _sortField = SortField.data;
+  SortDir   _sortDir   = SortDir.desc;
 
   String _pdfFiltro = 'mese';
 
@@ -73,8 +80,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           .get();
       final all = snap.docs.map((d) {
         try { return Appointment.fromFirestore(d); } catch (_) { return null; }
-      }).whereType<Appointment>().toList()
-        ..sort((a, b) => a.data.compareTo(b.data));
+      }).whereType<Appointment>().toList();
       setState(() { _allFetched = all; });
       _applyLocalFilters();
     } catch (e) {
@@ -113,16 +119,39 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     if (_filtroFatturato == 'no') f = f.where((a) => !a.fatturato).toList();
     if (_filtroPageto    == 'si') f = f.where((a) => a.pagato).toList();
     if (_filtroPageto    == 'no') f = f.where((a) => !a.pagato).toList();
-    // Filtro lavoratore
     if (_filtroLavoratore != null) {
       f = f.where((a) =>
           a.userId == _filtroLavoratore ||
           (a.workerIds?.contains(_filtroLavoratore) ?? false)).toList();
     }
+    _sortList(f);
     setState(() { _appointments = f; _loading = false; });
   }
 
-  // Lavoratori presenti negli appuntamenti caricati
+  void _sortList(List<Appointment> list) {
+    list.sort((a, b) {
+      int cmp;
+      switch (_sortField) {
+        case SortField.data:   cmp = a.data.compareTo(b.data); break;
+        case SortField.totale: cmp = a.totale.compareTo(b.totale); break;
+        case SortField.ore:    cmp = a.oreTotali.compareTo(b.oreTotali); break;
+      }
+      return _sortDir == SortDir.desc ? -cmp : cmp;
+    });
+  }
+
+  void _setSort(SortField field) {
+    setState(() {
+      if (_sortField == field) {
+        _sortDir = _sortDir == SortDir.desc ? SortDir.asc : SortDir.desc;
+      } else {
+        _sortField = field;
+        _sortDir   = SortDir.desc;
+      }
+      _sortList(_appointments);
+    });
+  }
+
   List<MapEntry<String, String>> get _lavoratoriDisponibili {
     final ids = <String>{};
     for (final a in _allFetched) {
@@ -170,7 +199,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
 
     final (start, end, periodoLabel) = _pdfRange();
 
-    // Applica anche il filtro lavoratore al PDF
     List<Appointment> pdfData = _allFetched.where((a) {
       if (a.deleted == true) return false;
       if (a.fatturato == true) return false;
@@ -182,6 +210,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
           a.userId == _filtroLavoratore ||
           (a.workerIds?.contains(_filtroLavoratore) ?? false)).toList();
     }
+    // PDF sempre cronologico crescente
     pdfData.sort((a, b) => a.data.compareTo(b.data));
 
     if (pdfData.isEmpty) {
@@ -418,6 +447,38 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
     );
   }
 
+  // ── SORT BUTTON HELPER ───────────────────────────────────────────
+  Widget _sortBtn(String label, SortField field, Color primary) {
+    final active = _sortField == field;
+    final icon = active
+        ? (_sortDir == SortDir.desc ? Icons.arrow_downward : Icons.arrow_upward)
+        : Icons.unfold_more;
+    return GestureDetector(
+      onTap: () => _setSort(field),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? primary.withOpacity(0.1) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: active ? primary.withOpacity(0.5) : Colors.grey.shade300,
+            width: active ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(label, style: TextStyle(
+            fontSize: 12,
+            color: active ? primary : Colors.grey[600],
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          )),
+          const SizedBox(width: 3),
+          Icon(icon, size: 13, color: active ? primary : Colors.grey[400]),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
@@ -448,7 +509,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
-                // Cliente
                 DropdownButtonFormField<Client>(
                   value: _selectedClient,
                   decoration: InputDecoration(
@@ -464,7 +524,7 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       _selectedClient = v;
                       _appointments = [];
                       _allFetched = [];
-                      _filtroLavoratore = null; // reset filtro
+                      _filtroLavoratore = null;
                     });
                     _autoSearch();
                   },
@@ -472,7 +532,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // Filtro lavoratore (visibile solo se ci sono appuntamenti)
                 if (hasDati) ...[
                   DropdownButtonFormField<String?>(
                     value: _filtroLavoratore,
@@ -484,14 +543,8 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                       isDense: true,
                     ),
                     items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Tutti i lavoratori'),
-                      ),
-                      ...lavoratori.map((e) => DropdownMenuItem<String?>(
-                        value: e.key,
-                        child: Text(e.value),
-                      )),
+                      const DropdownMenuItem<String?>(value: null, child: Text('Tutti i lavoratori')),
+                      ...lavoratori.map((e) => DropdownMenuItem<String?>(value: e.key, child: Text(e.value))),
                     ],
                     onChanged: (v) {
                       setState(() => _filtroLavoratore = v);
@@ -501,7 +554,6 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                   const SizedBox(height: 10),
                 ],
 
-                // Periodo chips
                 Row(
                   children: [
                     _periodoChip('mese',   'Mese',   primary),
@@ -640,11 +692,11 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
               ),
             ),
 
+          // ── BARRA ORDINAMENTO ──────────────────────────────────────
           if (!_loading && _appointments.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   RichText(text: TextSpan(
                     style: DefaultTextStyle.of(context).style,
@@ -660,12 +712,14 @@ class _ClientReportScreenState extends State<ClientReportScreen> {
                         ),
                     ],
                   )),
-                  Row(children: [
-                    Icon(Icons.touch_app, size: 13, color: Colors.grey[400]),
-                    const SizedBox(width: 3),
-                    Text('Tocca Fatt./Pag. per aggiornare',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[400])),
-                  ]),
+                  const Spacer(),
+                  Text('Ordina:', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                  const SizedBox(width: 6),
+                  _sortBtn('Data',   SortField.data,   primary),
+                  const SizedBox(width: 6),
+                  _sortBtn('Totale', SortField.totale, primary),
+                  const SizedBox(width: 6),
+                  _sortBtn('Ore',    SortField.ore,    primary),
                 ],
               ),
             ),
